@@ -29,6 +29,7 @@ void main() {
         isTrue,
       );
       expect(state.currentPlayerIndex, 0);
+      expect(state.players[state.currentPlayerIndex].color, PlayerColor.red);
       expect(state.phase, GamePhase.rolling);
     });
   });
