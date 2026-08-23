@@ -1,6 +1,10 @@
-/// Rolls the die: returns 1-6.
+import 'dart:math';
+
+/// Rolls a single six-sided die: returns 1-6.
 ///
-/// TODO(Vedant): implement in V5.
-int rollDie() {
-  throw UnimplementedError('V5 — dice not yet implemented');
+/// Accepts an injectable [random] source so tests can seed deterministic
+/// rolls instead of depending on real randomness.
+int rollDie([Random? random]) {
+  final r = random ?? Random();
+  return r.nextInt(6) + 1;
 }
