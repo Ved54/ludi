@@ -1,0 +1,50 @@
+name: Claude Auto Review
+
+# Actual AI code review — reads the diff, spots correctness bugs and
+# logic drift, posts inline comments. Complements auto-assign-reviewer.yml
+# (which just requests a human) and CODEOWNERS (which routes by path).
+#
+# Requires an ANTHROPIC_API_KEY repo secret. Without it this job fails
+# but does not block merging — it isn't a required status check.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          track_progress: true
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            This is Ludi, a bidirectional Ludo variant (see README.md
+            Sections 1-4 for the rules). Review this PR with a focus on:
+            - Correctness bugs, especially in lib/rules_engine/ — the
+              bidirectional move/capture logic is the core invariant of
+              this game (backward moves are legal ONLY if they capture).
+            - Logic drift from the Shared Contract in README Section 6
+              (Token, Player, GameState, Move, GameController shapes).
+            - Reuse, simplification, and efficiency issues.
+            - Missing test coverage for new rules-engine logic.
+
+            The PR branch is already checked out in the current working
+            directory. Use `gh pr comment` for top-level feedback. Use
+            `mcp__github_inline_comment__create_inline_comment` (with
+            `confirmed: true`) to highlight specific lines. Only post
+            GitHub comments — don't submit review text as chat messages.
+          claude_args: |
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
