@@ -1,0 +1,29 @@
+name: Auto-assign reviewer
+
+# Cross-review for a 2-person team: whichever of Vedant/Aditi opens a PR,
+# the other gets auto-requested as reviewer. Complements CODEOWNERS, which
+# only fires for the specific paths a person owns.
+on:
+  pull_request:
+    types: [opened, ready_for_review]
+
+jobs:
+  assign:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const counterpart = {
+              Ved54: ['Aditisalvi'],
+              Aditisalvi: ['Ved54'],
+            };
+            const author = context.payload.pull_request.user.login;
+            const reviewers = counterpart[author];
+            if (!reviewers) return;
+            await github.rest.pulls.requestReviewers({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              reviewers,
+            });
