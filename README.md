@@ -254,6 +254,8 @@ ludi/
 
 Vedant creates the repo and pushes the full folder skeleton with contract stubs as the very first commit — this unblocks Aditi immediately instead of making her wait on real logic.
 
+**Status: V1–V7 complete, all merged into `dev`.** `GameController` (Section 6) is now the real implementation, not a stub — Aditi's Claude Code instance can wire against it directly instead of mocking it.
+
 | # | Module | Description | Files/Folders | Depends on |
 |---|---|---|---|---|
 | V1 | Repo & folder scaffold | Create repo, full `lib/**` structure (Section 7), empty stub files for the Shared Contract | repo root, `lib/**` skeleton | none — do first |
@@ -297,10 +299,13 @@ The one genuinely blocking step for **both** developers: **V1 (repo + folder sca
 
 ## 13. Git Workflow
 
-- Vedant creates the repo, pushes V1 (folder skeleton + contract stubs) as the first commit.
-- Branch per owner: `vedant/rules-engine`, `aditi/rendering-ui` — sub-branch per module if useful (e.g. `aditi/board-component`).
-- Small, frequent PRs into `main`. Folders are physically separated by owner, so merge conflicts should be rare.
-- If the Shared Contract needs to change (e.g. `Move` gains a new field), open a PR against just that file and flag it to the other person before merging — it's the one surface both sides depend on.
+- Vedant created the repo, pushed V1 (folder skeleton + contract stubs) as the first commit.
+- **Branches:** `dev` is the active integration branch (default branch). `main` is the release branch. Everyone branches off a freshly-pulled `dev`, never off `main`.
+- **Branch naming:** one branch per module, prefixed by owner — `vedant/<module>` (e.g. `vedant/legal-moves`, `vedant/turn-manager`) and `aditi/<module>` (e.g. `aditi/board-component`, `aditi/dice-animation`).
+- **PRs target `dev`, not `main`.** Both Claude Code instances open PRs with base `dev`. Small, frequent PRs — folders are physically separated by owner, so merge conflicts should be rare.
+- **Review gate:** every commit, push, and PR is explicitly authorized by the human owner first — Claude Code implements + tests on a branch and reports back; it does not commit/push/open a PR unprompted. The `auto-assign-reviewer` workflow cross-assigns Vedant ↔ Aditi as reviewer on every PR.
+- **`dev` → `main` promotion is Vedant's call only.** Neither Claude Code instance merges `dev` into `main` or pushes directly to `main` — that promotion is done manually by Vedant once a batch of merged `dev` work is verified stable. Aditi's Claude Code instance should never touch `main` at all.
+- If the Shared Contract (Section 6) needs to change (e.g. `Move` gains a new field), open a PR against just that file and flag it to the other person before merging — it's the one surface both sides depend on.
 
 ---
 
