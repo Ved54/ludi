@@ -1,0 +1,20 @@
+# Scope rules per README Section 9.
+
+# Vedant — rules engine & state
+/lib/rules_engine/ @Ved54
+/lib/state/ @Ved54
+/test/ @Ved54
+
+# Aditi — rendering, audio, UI
+/lib/game/ @Aditisalvi
+/lib/audio/ @Aditisalvi
+/lib/ui/ @Aditisalvi
+/assets/ @Aditisalvi
+
+# Shared Contract (README Section 6) — both must review any change to its shape
+/lib/rules_engine/models/ @Ved54 @Aditisalvi
+/lib/state/game_controller.dart @Ved54 @Aditisalvi
+
+# Repo root & config
+/pubspec.yaml @Ved54
+/analysis_options.yaml @Ved54
