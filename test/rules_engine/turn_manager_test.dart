@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ludi/rules_engine/turn_manager.dart';
 import 'package:ludi/rules_engine/models/game_state.dart';
@@ -50,6 +52,47 @@ void main() {
       expect(state.currentPlayerIndex, 1);
       expect(state.phase, GamePhase.rolling);
       expect(state.legalMoves, isEmpty);
+    });
+
+    test('gathers both forward and backward moves when both are legal', () {
+      // Random(11) rolls 3 first — see the dice value math in the setup
+      // below, which is built around a roll of 3.
+      final redToken = Token(
+        id: 'r1',
+        color: PlayerColor.red,
+        distance: 10, // square 9
+        state: TokenState.active,
+      );
+      // backward: distance 7 -> square 6. Put an opponent there so backward
+      // is offered too.
+      final greenBlocker = Token(
+        id: 'g1',
+        color: PlayerColor.green,
+        distance: 46, // 13 + 46 - 1 = 58 % 52 = 6
+        state: TokenState.active,
+      );
+      final state = buildState(
+        players: [
+          Player(color: PlayerColor.red, startSquare: 0, tokens: [redToken]),
+          Player(
+            color: PlayerColor.green,
+            startSquare: 13,
+            tokens: [greenBlocker],
+          ),
+        ],
+      );
+
+      rollDice(state, random: Random(11));
+
+      expect(state.lastDiceValue, 3);
+      expect(state.legalMoves.length, 2);
+      expect(state.legalMoves.any((m) => !m.isBackward && m.newDistance == 13), isTrue);
+      expect(
+        state.legalMoves.any(
+          (m) => m.isBackward && m.newDistance == 7 && m.capturedToken == greenBlocker,
+        ),
+        isTrue,
+      );
     });
 
     test('skips finished tokens when gathering legal moves', () {

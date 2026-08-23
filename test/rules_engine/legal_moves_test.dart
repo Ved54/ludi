@@ -125,6 +125,39 @@ void main() {
       expect(moves.first.capturedToken, greenToken);
     });
 
+    test('captures an opponent on the last shared-track square (distance 51)', () {
+      final redToken = Token(
+        id: 'r1',
+        color: PlayerColor.red,
+        distance: 45,
+        state: TokenState.active,
+      );
+      // red distance 45 -> square 44. +6 -> distance 51 -> square 50, still
+      // shared track (homeStretchStart is 52), so still capturable.
+      final greenToken = Token(
+        id: 'g1',
+        color: PlayerColor.green,
+        distance: 38,
+        state: TokenState.active,
+      ); // 13 + 38 - 1 = 50
+
+      final state = buildState(
+        players: [
+          Player(color: PlayerColor.red, startSquare: 0, tokens: [redToken]),
+          Player(
+            color: PlayerColor.green,
+            startSquare: 13,
+            tokens: [greenToken],
+          ),
+        ],
+      );
+
+      final moves = getLegalMoves(redToken, 6, state);
+
+      expect(moves.first.newDistance, 51);
+      expect(moves.first.capturedToken, greenToken);
+    });
+
     test('forward move into the home stretch never captures', () {
       final redToken = Token(
         id: 'r1',
