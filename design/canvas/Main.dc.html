@@ -141,14 +141,40 @@ class Component extends DCLogic {
     }
 
     // ---- arm cells ----
+    // Home lane: 6 cells long (board edge -> center); the 5 nearest the
+    // center are the "final approach" (light tint), the outermost stays
+    // plain white.
+    // Solid safe square: NOT on the home lane at all — it's on the outer
+    // track lane that borders that color's own yard, one cell in from the
+    // board edge. E.g. yellow (right arm) sits at c=13,r=8, not c=14,r=7.
     const cells = [];
     function addCell(c, r, fill) {
       cells.push({ x: c * CELL, y: r * CELL, w: CELL, h: CELL, fill, stroke: NEUTRAL.line });
     }
-    for (let r = 0; r < 6; r++) for (let c = 6; c <= 8; c++) addCell(c, r, c === 7 ? COLORS[ARM_HOME.top].light : NEUTRAL.square);
-    for (let r = 9; r < 15; r++) for (let c = 6; c <= 8; c++) addCell(c, r, c === 7 ? COLORS[ARM_HOME.bottom].light : NEUTRAL.square);
-    for (let c = 0; c < 6; c++) for (let r = 6; r <= 8; r++) addCell(c, r, r === 7 ? COLORS[ARM_HOME.left].light : NEUTRAL.square);
-    for (let c = 9; c < 15; c++) for (let r = 6; r <= 8; r++) addCell(c, r, r === 7 ? COLORS[ARM_HOME.right].light : NEUTRAL.square);
+    for (let r = 0; r < 6; r++) for (let c = 6; c <= 8; c++) {
+      let fill = NEUTRAL.square;
+      if (c === 7 && r !== 0) fill = COLORS[ARM_HOME.top].light;
+      if (c === 8 && r === 1) fill = COLORS[ARM_HOME.top].base; // green's own-yard lane
+      addCell(c, r, fill);
+    }
+    for (let r = 9; r < 15; r++) for (let c = 6; c <= 8; c++) {
+      let fill = NEUTRAL.square;
+      if (c === 7 && r !== 14) fill = COLORS[ARM_HOME.bottom].light;
+      if (c === 6 && r === 13) fill = COLORS[ARM_HOME.bottom].base; // blue's own-yard lane
+      addCell(c, r, fill);
+    }
+    for (let c = 0; c < 6; c++) for (let r = 6; r <= 8; r++) {
+      let fill = NEUTRAL.square;
+      if (r === 7 && c !== 0) fill = COLORS[ARM_HOME.left].light;
+      if (r === 6 && c === 1) fill = COLORS[ARM_HOME.left].base; // red's own-yard lane
+      addCell(c, r, fill);
+    }
+    for (let c = 9; c < 15; c++) for (let r = 6; r <= 8; r++) {
+      let fill = NEUTRAL.square;
+      if (r === 7 && c !== 14) fill = COLORS[ARM_HOME.right].light;
+      if (r === 8 && c === 13) fill = COLORS[ARM_HOME.right].base; // yellow's own-yard lane
+      addCell(c, r, fill);
+    }
 
     // ---- center wedges ----
     const CS = 144, CE = 216, CX = 180, CY = 180;
@@ -185,16 +211,21 @@ class Component extends DCLogic {
     });
 
     // ---- sample mid-track tokens (illustrative placement) ----
+    // Kept clear of every safe-square cell below so nothing overlaps.
     const trackTokens = [
-      { cx: 1 * CELL + 12, cy: 6 * CELL + 12, color: 'red' },
-      { cx: 6 * CELL + 12, cy: 2 * CELL + 12, color: 'green' },
+      { cx: 3 * CELL + 12, cy: 7 * CELL + 12, color: 'red' },
+      { cx: 8 * CELL + 12, cy: 3 * CELL + 12, color: 'green' },
       { cx: 10 * CELL + 12, cy: 7 * CELL + 12, color: 'yellow' },
-      { cx: 8 * CELL + 12, cy: 12 * CELL + 12, color: 'blue' },
+      { cx: 6 * CELL + 12, cy: 11 * CELL + 12, color: 'blue' },
     ].map((t) => ({ cx: t.cx, cy: t.cy, base: COLORS[t.color].base, deep: COLORS[t.color].deep, scale: 0.85 }));
 
-    // ---- safe squares (illustrative, one per arm) ----
+    // ---- safe squares: 8 total, matching classic Ludo ----
+    // 4 plain mid-arm stars (four-fold rotationally symmetric around the
+    // board center) + each color's own colored home-lane entry cell, built
+    // above in the arm-cells loop — that one reads as safe via its color
+    // fill, not a star, so it isn't duplicated here.
     const stars = [
-      { c: 8, r: 4 }, { c: 12, r: 6 }, { c: 6, r: 10 }, { c: 3, r: 8 },
+      { c: 6, r: 2 }, { c: 12, r: 6 }, { c: 8, r: 12 }, { c: 2, r: 8 },
     ].map((s) => ({ points: starPoints(s.c * CELL + 12, s.r * CELL + 12, 7, 3) }));
 
     // ---- HUD dice (flat isometric cube) ----
