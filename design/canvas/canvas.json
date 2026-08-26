@@ -1,0 +1,8 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 390, "h": 844, "title": "Board Mockup" },
+    { "file": "StyleReference.dc.html", "x": 570, "y": 0, "w": 960, "h": 1160, "title": "Style Reference" },
+    { "file": "SquareMap.dc.html", "x": 1650, "y": 0, "w": 900, "h": 990, "title": "Square Map" }
+  ],
+  "launch": { "view": "focused", "file": "SquareMap.dc.html" }
+}

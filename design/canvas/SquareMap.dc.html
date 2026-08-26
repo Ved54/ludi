@@ -1,0 +1,151 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: 'Nunito', system-ui, sans-serif; }
+    a { color: #4E74B5; }
+    a:hover { color: #3A342C; }
+  </style>
+</helmet>
+
+<div style="width:900px;background:#FAF6F0;padding:32px;">
+  <div style="font-family:'Nunito',sans-serif;font-weight:700;font-size:22px;color:#3A342C;">Board Square Map</div>
+  <div style="font-family:'Nunito',sans-serif;font-weight:400;font-size:13px;color:#8A8175;margin-top:4px;max-width:760px;">
+    Every label reads <b>col,row</b> (both 0-indexed) — c=0 is the left edge, r=0 is the top edge. Point at any square by its coordinates, e.g. "c=2, r=6", and there's no ambiguity about which cell is meant.
+  </div>
+  <div style="display:flex;gap:18px;margin-top:12px;margin-bottom:16px;flex-wrap:wrap;">
+    <div style="display:flex;align-items:center;gap:6px;"><span style="width:14px;height:14px;border-radius:3px;background:#F7D9D6;display:inline-block;border:1px solid #E4DCD0;"></span><span style="font-family:'Nunito',sans-serif;font-size:12px;color:#8A8175;">home lane (light)</span></div>
+    <div style="display:flex;align-items:center;gap:6px;"><span style="width:14px;height:14px;border-radius:3px;background:#E8746B;display:inline-block;"></span><span style="font-family:'Nunito',sans-serif;font-size:12px;color:#8A8175;">solid safe square (current)</span></div>
+    <div style="display:flex;align-items:center;gap:6px;"><span style="width:14px;height:14px;border-radius:3px;background:#FFFFFF;display:inline-block;border:1px solid #E4DCD0;"></span><span style="font-family:'Nunito',sans-serif;font-size:12px;color:#8A8175;">plain track</span></div>
+    <div style="display:flex;align-items:center;gap:6px;"><span style="font-size:14px;">★</span><span style="font-family:'Nunito',sans-serif;font-size:12px;color:#8A8175;">star (current)</span></div>
+  </div>
+
+  <div style="position:relative;width:800px;height:790px;">
+    <sc-for list="{{colHeaders}}" as="h" hint-placeholder-count="15">
+      <div style="position:absolute;left:{{h.x}}px;top:{{h.y}}px;width:50px;height:20px;text-align:center;font-family:'Nunito',sans-serif;font-size:12px;color:#8A8175;">{{h.label}}</div>
+    </sc-for>
+    <sc-for list="{{rowHeaders}}" as="h" hint-placeholder-count="15">
+      <div style="position:absolute;left:{{h.x}}px;top:{{h.y}}px;width:28px;height:50px;display:flex;align-items:center;justify-content:center;font-family:'Nunito',sans-serif;font-size:12px;color:#8A8175;">{{h.label}}</div>
+    </sc-for>
+
+    <sc-for list="{{yardBlocks}}" as="yb" hint-placeholder-count="4">
+      <div style="position:absolute;left:{{yb.x}}px;top:{{yb.y}}px;width:{{yb.size}}px;height:{{yb.size}}px;background:{{yb.fill}};display:flex;align-items:center;justify-content:center;">
+        <span style="font-family:'Nunito',sans-serif;font-weight:700;font-size:14px;color:{{yb.color}};">{{yb.text}}</span>
+      </div>
+    </sc-for>
+
+    <sc-for list="{{cells}}" as="cell" hint-placeholder-count="81">
+      <div style="position:absolute;left:{{cell.x}}px;top:{{cell.y}}px;width:{{cell.size}}px;height:{{cell.size}}px;background:{{cell.fill}};border:1px solid #E4DCD0;display:flex;align-items:center;justify-content:center;">
+        <span style="font-family:'Nunito',sans-serif;font-size:11px;color:{{cell.labelColor}};">{{cell.label}}</span>
+      </div>
+    </sc-for>
+
+    <sc-for list="{{stars}}" as="s" hint-placeholder-count="4">
+      <div style="position:absolute;left:{{s.x}}px;top:{{s.y}}px;font-size:15px;line-height:1;pointer-events:none;">★</div>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const COLORS = {
+      red:    { base: '#E8746B', deep: '#C6564D', light: '#F7D9D6' },
+      green:  { base: '#6FBE8E', deep: '#4E9A6D', light: '#D8EFE2' },
+      yellow: { base: '#F0C25E', deep: '#D1A03D', light: '#FBEBC9' },
+      blue:   { base: '#6C94D6', deep: '#4E74B5', light: '#DAE5F5' },
+    };
+    const NEUTRAL = { square: '#FFFFFF', text: '#3A342C' };
+    const CELL = 50;
+    const N = 15;
+    const MARGIN_LEFT = 40;
+    const MARGIN_TOP = 30;
+    const ARM_HOME = { top: 'green', right: 'yellow', bottom: 'blue', left: 'red' };
+
+    const cells = [];
+    for (let r = 0; r < N; r++) {
+      for (let c = 0; c < N; c++) {
+        const inVertArm = c >= 6 && c <= 8;
+        const inHorizArm = r >= 6 && r <= 8;
+        const inYardBand = !inVertArm && !inHorizArm;
+        if (inYardBand) continue; // yards are drawn as merged blocks, not per-cell
+
+        const inCenter = inVertArm && inHorizArm;
+        let fill = NEUTRAL.square;
+        let labelColor = NEUTRAL.text;
+
+        // Home lane: light tint for the 5 cells nearest center, plain
+        // white at the outermost cell. Solid safe square: NOT on the home
+        // lane — it's on the outer lane bordering that color's own yard,
+        // one cell in from the board edge (e.g. yellow sits at c=13,r=8).
+        if (inCenter) {
+          fill = '#F0EAE0';
+        } else if (inVertArm) {
+          const isTop = r < 6;
+          if (c === 7) {
+            const isEdge = isTop ? r === 0 : r === 14;
+            if (!isEdge) fill = COLORS[isTop ? ARM_HOME.top : ARM_HOME.bottom].light;
+          } else if (isTop && c === 8 && r === 1) {
+            fill = COLORS[ARM_HOME.top].base;
+            labelColor = '#FFFFFF';
+          } else if (!isTop && c === 6 && r === 13) {
+            fill = COLORS[ARM_HOME.bottom].base;
+            labelColor = '#FFFFFF';
+          }
+        } else if (inHorizArm) {
+          const isLeft = c < 6;
+          if (r === 7) {
+            const isEdge = isLeft ? c === 0 : c === 14;
+            if (!isEdge) fill = COLORS[isLeft ? ARM_HOME.left : ARM_HOME.right].light;
+          } else if (isLeft && r === 6 && c === 1) {
+            fill = COLORS[ARM_HOME.left].base;
+            labelColor = '#FFFFFF';
+          } else if (!isLeft && r === 8 && c === 13) {
+            fill = COLORS[ARM_HOME.right].base;
+            labelColor = '#FFFFFF';
+          }
+        }
+
+        cells.push({
+          x: MARGIN_LEFT + c * CELL, y: MARGIN_TOP + r * CELL, size: CELL,
+          fill, labelColor, label: `${c},${r}`,
+        });
+      }
+    }
+
+    // Current mid-arm star positions (matches Main.dc.html today) — drawn
+    // in the corner of their cell so the coordinate label stays readable.
+    const stars = [
+      { c: 6, r: 2 }, { c: 12, r: 6 }, { c: 8, r: 12 }, { c: 2, r: 8 },
+    ].map((s) => ({
+      x: MARGIN_LEFT + s.c * CELL + CELL - 18,
+      y: MARGIN_TOP + s.r * CELL + 2,
+    }));
+
+    const yardBlocks = [
+      { x: MARGIN_LEFT + 0, y: MARGIN_TOP + 0, size: 300, fill: '#EFEAE0', text: 'RED YARD', color: COLORS.red.deep },
+      { x: MARGIN_LEFT + 9 * CELL, y: MARGIN_TOP + 0, size: 300, fill: '#EFEAE0', text: 'GREEN YARD', color: COLORS.green.deep },
+      { x: MARGIN_LEFT + 0, y: MARGIN_TOP + 9 * CELL, size: 300, fill: '#EFEAE0', text: 'BLUE YARD', color: COLORS.blue.deep },
+      { x: MARGIN_LEFT + 9 * CELL, y: MARGIN_TOP + 9 * CELL, size: 300, fill: '#EFEAE0', text: 'YELLOW YARD', color: COLORS.yellow.deep },
+    ];
+
+    const colHeaders = [];
+    for (let c = 0; c < N; c++) colHeaders.push({ x: MARGIN_LEFT + c * CELL, y: MARGIN_TOP - 22, label: String(c) });
+    const rowHeaders = [];
+    for (let r = 0; r < N; r++) rowHeaders.push({ x: MARGIN_LEFT - 30, y: MARGIN_TOP + r * CELL, label: String(r) });
+
+    return { cells, stars, yardBlocks, colHeaders, rowHeaders };
+  }
+}
+</script>
+</body>
+</html>
