@@ -1,0 +1,185 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: 'Nunito', system-ui, sans-serif; }
+    a { color: #4E74B5; }
+    a:hover { color: #3A342C; }
+    .sectionLabel { font-family:'Nunito',sans-serif; font-weight:600; font-size:12px; letter-spacing:1.5px; text-transform:uppercase; color:#8A8175; margin-bottom:14px; }
+    .hexLabel { font-family:'Nunito',sans-serif; font-weight:400; font-size:12px; color:#8A8175; }
+    .swatch { border-radius:10px; height:56px; }
+  </style>
+</helmet>
+
+<div style="width:960px;background:#FAF6F0;padding:56px;display:flex;flex-direction:column;gap:44px;">
+
+  <div>
+    <div style="font-family:'Nunito',sans-serif;font-weight:700;font-size:30px;color:#3A342C;">Ludi — Visual Style Reference</div>
+    <div style="font-family:'Nunito',sans-serif;font-weight:400;font-size:14px;color:#8A8175;margin-top:6px;">A1 · Visual Design — flat, minimal, modern. One page, source of truth for A2–A7.</div>
+  </div>
+
+  <div>
+    <div class="sectionLabel">Player Colors</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:24px;">
+      <sc-for list="{{colorGroups}}" as="grp" hint-placeholder-count="4">
+        <div style="background:#FFFFFF;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px;">
+          <div style="font-family:'Nunito',sans-serif;font-weight:600;font-size:14px;color:#3A342C;">{{grp.name}}</div>
+          <sc-for list="{{grp.shades}}" as="shade" hint-placeholder-count="3">
+            <div>
+              <div class="swatch" style="background:{{shade.hex}};"></div>
+              <div class="hexLabel" style="margin-top:4px;">{{shade.label}} · {{shade.hex}}</div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div>
+    <div class="sectionLabel">Neutrals</div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:16px;">
+      <sc-for list="{{neutrals}}" as="n" hint-placeholder-count="5">
+        <div>
+          <div class="swatch" style="background:{{n.hex}};border:1px solid #E4DCD0;"></div>
+          <div class="hexLabel" style="margin-top:4px;">{{n.label}}</div>
+          <div class="hexLabel">{{n.hex}}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div>
+    <div class="sectionLabel">Tokens</div>
+    <div style="background:#FFFFFF;border-radius:14px;padding:24px;display:flex;gap:28px;align-items:flex-end;">
+      <sc-for list="{{tokens}}" as="t" hint-placeholder-count="4">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
+          <svg width="64" height="76" viewBox="0 0 64 76">
+            <g transform="translate(32,42) scale(1.7)">
+              <ellipse cx="0" cy="13" rx="8" ry="2.5" fill="{{t.deep}}" opacity="0.35"></ellipse>
+              <rect x="-8" y="4" width="16" height="8" rx="4" fill="{{t.base}}"></rect>
+              <path d="M-4,4 L-2,-4 L2,-4 L4,4 Z" fill="{{t.base}}"></path>
+              <circle cx="0" cy="-7" r="6" fill="{{t.base}}"></circle>
+            </g>
+          </svg>
+          <div class="hexLabel">{{t.name}}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:24px;">
+    <div style="flex:1;">
+      <div class="sectionLabel">Dice</div>
+      <div style="background:#FFFFFF;border-radius:14px;padding:24px;display:flex;align-items:center;gap:20px;">
+        <svg width="110" height="110" viewBox="0 0 110 110">
+          <ellipse cx="55" cy="98" rx="28" ry="6" fill="#3A342C" opacity="0.12"></ellipse>
+          <polygon points="{{dice.topPts}}" fill="#F3EFE7"></polygon>
+          <polygon points="{{dice.sidePts}}" fill="#E6E0D4"></polygon>
+          <rect x="{{dice.fx}}" y="{{dice.fy}}" width="{{dice.fs}}" height="{{dice.fs}}" rx="8" fill="#FFFFFF" stroke="#E4DCD0"></rect>
+          <sc-for list="{{dice.pips}}" as="pip" hint-placeholder-count="6">
+            <circle cx="{{pip.cx}}" cy="{{pip.cy}}" r="{{pip.r}}" fill="#3A342C"></circle>
+          </sc-for>
+        </svg>
+        <div class="hexLabel">Color-neutral cube.<br>Flat-shaded faces, one contact shadow.<br>Dark pips on #FFFFFF.</div>
+      </div>
+    </div>
+    <div style="flex:1;">
+      <div class="sectionLabel">Safe Square</div>
+      <div style="background:#FFFFFF;border-radius:14px;padding:24px;display:flex;align-items:center;gap:20px;">
+        <svg width="60" height="60" viewBox="0 0 60 60">
+          <rect x="4" y="4" width="52" height="52" rx="6" fill="#FAF6F0" stroke="#E4DCD0"></rect>
+          <polygon points="{{starPoints}}" fill="#3A342C" opacity="0.4"></polygon>
+        </svg>
+        <div class="hexLabel">Star icon, #3A342C at 40% opacity, centered on the square.</div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="sectionLabel">Typography — Nunito</div>
+    <div style="background:#FFFFFF;border-radius:14px;padding:24px;display:flex;flex-direction:column;gap:16px;">
+      <div>
+        <div style="font-family:'Nunito',sans-serif;font-weight:700;font-size:32px;color:#3A342C;">Ludi</div>
+        <div class="hexLabel">Bold 700 · Screen titles, game-over banners</div>
+      </div>
+      <div>
+        <div style="font-family:'Nunito',sans-serif;font-weight:600;font-size:18px;color:#3A342C;">Red's Turn</div>
+        <div class="hexLabel">SemiBold 600 · HUD labels, turn indicator, dice value</div>
+      </div>
+      <div>
+        <div style="font-family:'Nunito',sans-serif;font-weight:400;font-size:15px;color:#3A342C;max-width:520px;">Move any token forward or backward by the dice roll — your choice, every turn.</div>
+        <div class="hexLabel">Regular 400 · Body copy, settings labels</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+
+<script data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const COLORS = {
+      Red:    { base: '#E8746B', deep: '#C6564D', light: '#F7D9D6' },
+      Green:  { base: '#6FBE8E', deep: '#4E9A6D', light: '#D8EFE2' },
+      Yellow: { base: '#F0C25E', deep: '#D1A03D', light: '#FBEBC9' },
+      Blue:   { base: '#6C94D6', deep: '#4E74B5', light: '#DAE5F5' },
+    };
+
+    const colorGroups = Object.keys(COLORS).map((name) => ({
+      name,
+      shades: [
+        { label: 'Base', hex: COLORS[name].base },
+        { label: 'Deep', hex: COLORS[name].deep },
+        { label: 'Light', hex: COLORS[name].light },
+      ],
+    }));
+
+    const neutrals = [
+      { label: 'Board background', hex: '#FAF6F0' },
+      { label: 'Track squares', hex: '#FFFFFF' },
+      { label: 'Grid lines', hex: '#E4DCD0' },
+      { label: 'Text primary', hex: '#3A342C' },
+      { label: 'Text secondary', hex: '#8A8175' },
+    ];
+
+    const tokens = Object.keys(COLORS).map((name) => ({
+      name, base: COLORS[name].base, deep: COLORS[name].deep,
+    }));
+
+    function starPoints(cx, cy, outerR, innerR) {
+      const pts = [];
+      for (let i = 0; i < 10; i++) {
+        const r = i % 2 === 0 ? outerR : innerR;
+        const angle = -Math.PI / 2 + (Math.PI / 5) * i;
+        pts.push((cx + r * Math.cos(angle)).toFixed(1) + ',' + (cy + r * Math.sin(angle)).toFixed(1));
+      }
+      return pts.join(' ');
+    }
+
+    const PIP_LAYOUT_6 = [[0.28, 0.22], [0.72, 0.22], [0.28, 0.5], [0.72, 0.5], [0.28, 0.78], [0.72, 0.78]];
+    const fx = 14, fy = 24, fs = 60, d = 16;
+    const dice = {
+      topPts: `${fx},${fy} ${fx + d},${fy - d} ${fx + fs + d},${fy - d} ${fx + fs},${fy}`,
+      sidePts: `${fx + fs},${fy} ${fx + fs + d},${fy - d} ${fx + fs + d},${fy - d + fs} ${fx + fs},${fy + fs}`,
+      fx, fy, fs,
+      pips: PIP_LAYOUT_6.map(([px, py]) => ({ cx: fx + px * fs, cy: fy + py * fs, r: 5 })),
+    };
+
+    return {
+      colorGroups, neutrals, tokens, dice,
+      starPoints: starPoints(30, 30, 14, 6),
+    };
+  }
+}
+</script>
+</body>
+</html>

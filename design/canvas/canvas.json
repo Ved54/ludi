@@ -1,0 +1,7 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 390, "h": 844, "title": "Board Mockup" },
+    { "file": "StyleReference.dc.html", "x": 570, "y": 0, "w": 960, "h": 1160, "title": "Style Reference" }
+  ],
+  "launch": { "view": "canvas" }
+}

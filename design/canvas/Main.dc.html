@@ -1,0 +1,230 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: 'Nunito', system-ui, sans-serif; }
+    a { color: #4E74B5; }
+    a:hover { color: #3A342C; }
+  </style>
+</helmet>
+
+<div style="width:390px;height:844px;background:#FAF6F0;border-radius:40px;overflow:hidden;position:relative;display:flex;flex-direction:column;box-shadow:0 1px 3px rgba(58,52,44,0.15);">
+
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:22px 24px 0 24px;">
+    <div style="font-family:'Nunito',sans-serif;font-weight:700;font-size:22px;color:#3A342C;">Ludi</div>
+    <div style="width:36px;height:36px;border-radius:12px;background:#FFFFFF;display:flex;align-items:center;justify-content:center;">
+      <svg width="18" height="18" viewBox="0 0 20 20">
+        <line x1="3" y1="6" x2="17" y2="6" stroke="#8A8175" stroke-width="2" stroke-linecap="round"></line>
+        <line x1="3" y1="10" x2="17" y2="10" stroke="#8A8175" stroke-width="2" stroke-linecap="round"></line>
+        <line x1="3" y1="14" x2="17" y2="14" stroke="#8A8175" stroke-width="2" stroke-linecap="round"></line>
+      </svg>
+    </div>
+  </div>
+
+  <div style="display:flex;justify-content:center;align-items:center;gap:14px;padding:22px 24px 14px 24px;">
+    <div style="background:{{turnLight}};color:{{turnDeep}};border-radius:999px;padding:10px 20px;display:flex;align-items:center;gap:9px;font-family:'Nunito',sans-serif;font-weight:600;font-size:15px;">
+      <span style="width:10px;height:10px;border-radius:50%;background:{{turnBase}};display:inline-block;"></span>
+      {{turnLabel}}
+    </div>
+
+    <svg width="52" height="48" viewBox="0 0 52 48">
+      <ellipse cx="26" cy="45" rx="14" ry="3" fill="#3A342C" opacity="0.12"></ellipse>
+      <polygon points="{{dice.topPts}}" fill="#F3EFE7"></polygon>
+      <polygon points="{{dice.sidePts}}" fill="#E6E0D4"></polygon>
+      <rect x="{{dice.fx}}" y="{{dice.fy}}" width="{{dice.fs}}" height="{{dice.fs}}" rx="4" fill="#FFFFFF" stroke="#E4DCD0"></rect>
+      <sc-for list="{{dice.pips}}" as="pip" hint-placeholder-count="4">
+        <circle cx="{{pip.cx}}" cy="{{pip.cy}}" r="{{pip.r}}" fill="#3A342C"></circle>
+      </sc-for>
+    </svg>
+  </div>
+
+  <div style="display:flex;justify-content:center;padding:4px 0 8px 0;">
+    <svg width="360" height="360" viewBox="0 0 360 360">
+      <rect x="0" y="0" width="360" height="360" fill="{{boardBg}}"></rect>
+
+      <sc-for list="{{cells}}" as="cell" hint-placeholder-count="72">
+        <rect x="{{cell.x}}" y="{{cell.y}}" width="{{cell.w}}" height="{{cell.h}}" fill="{{cell.fill}}" stroke="{{cell.stroke}}" stroke-width="1"></rect>
+      </sc-for>
+
+      <sc-for list="{{wedges}}" as="w" hint-placeholder-count="4">
+        <polygon points="{{w.points}}" fill="{{w.fill}}"></polygon>
+      </sc-for>
+
+      <sc-for list="{{yards}}" as="y" hint-placeholder-count="4">
+        <rect x="{{y.x}}" y="{{y.y}}" width="{{y.size}}" height="{{y.size}}" rx="16" fill="{{y.bgFill}}"></rect>
+        <rect x="{{y.trayX}}" y="{{y.trayY}}" width="{{y.traySize}}" height="{{y.traySize}}" rx="10" fill="{{y.trayFill}}"></rect>
+        <rect x="{{y.x}}" y="{{y.y}}" width="{{y.size}}" height="{{y.size}}" rx="16" fill="none" stroke="{{y.ringStroke}}" stroke-width="{{y.ringWidth}}"></rect>
+      </sc-for>
+
+      <sc-for list="{{stars}}" as="star" hint-placeholder-count="4">
+        <polygon points="{{star.points}}" fill="#3A342C" opacity="0.4"></polygon>
+      </sc-for>
+
+      <sc-for list="{{yardTokens}}" as="t" hint-placeholder-count="16">
+        <g transform="translate({{t.cx}},{{t.cy}}) scale({{t.scale}})">
+          <ellipse cx="0" cy="13" rx="8" ry="2.5" fill="{{t.deep}}" opacity="0.35"></ellipse>
+          <rect x="-8" y="4" width="16" height="8" rx="4" fill="{{t.base}}"></rect>
+          <path d="M-4,4 L-2,-4 L2,-4 L4,4 Z" fill="{{t.base}}"></path>
+          <circle cx="0" cy="-7" r="6" fill="{{t.base}}"></circle>
+        </g>
+      </sc-for>
+
+      <sc-for list="{{trackTokens}}" as="t" hint-placeholder-count="4">
+        <g transform="translate({{t.cx}},{{t.cy}}) scale({{t.scale}})">
+          <ellipse cx="0" cy="13" rx="8" ry="2.5" fill="{{t.deep}}" opacity="0.35"></ellipse>
+          <rect x="-8" y="4" width="16" height="8" rx="4" fill="{{t.base}}"></rect>
+          <path d="M-4,4 L-2,-4 L2,-4 L4,4 Z" fill="{{t.base}}"></path>
+          <circle cx="0" cy="-7" r="6" fill="{{t.base}}"></circle>
+        </g>
+      </sc-for>
+    </svg>
+  </div>
+
+  <div style="flex:1;"></div>
+
+  <div style="display:flex;justify-content:space-around;align-items:center;padding:14px 24px 30px 24px;border-top:1px solid #E4DCD0;">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <svg width="20" height="20" viewBox="0 0 20 20">
+        <polyline points="3,10 10,3 17,10" fill="none" stroke="#8A8175" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></polyline>
+        <rect x="5" y="10" width="10" height="7" fill="none" stroke="#8A8175" stroke-width="2"></rect>
+      </svg>
+      <span style="font-family:'Nunito',sans-serif;font-weight:400;font-size:13px;color:#8A8175;">Home</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <svg width="20" height="20" viewBox="0 0 20 20">
+        <path d="M3,8 L7,8 L11,4 L11,16 L7,12 L3,12 Z" fill="#8A8175"></path>
+        <path d="M14,7 Q17,10 14,13" fill="none" stroke="#8A8175" stroke-width="2" stroke-linecap="round"></path>
+        <path d="M16,5 Q20,10 16,15" fill="none" stroke="#8A8175" stroke-width="2" stroke-linecap="round"></path>
+      </svg>
+      <span style="font-family:'Nunito',sans-serif;font-weight:400;font-size:13px;color:#8A8175;">Sound</span>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"turn":{"editor":"enum","default":"red","options":["red","green","yellow","blue"],"section":"Game State"},"diceValue":{"editor":"int","default":4,"min":1,"max":6,"unit":"pips","section":"Game State"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const COLORS = {
+      red:    { base: '#E8746B', deep: '#C6564D', light: '#F7D9D6' },
+      green:  { base: '#6FBE8E', deep: '#4E9A6D', light: '#D8EFE2' },
+      yellow: { base: '#F0C25E', deep: '#D1A03D', light: '#FBEBC9' },
+      blue:   { base: '#6C94D6', deep: '#4E74B5', light: '#DAE5F5' },
+    };
+    const NEUTRAL = { bg: '#FAF6F0', square: '#FFFFFF', line: '#E4DCD0', text: '#3A342C' };
+    const CELL = 24;
+
+    // Arm -> home-stretch color (each color's stretch sits in the arm
+    // reached last, clockwise, before returning to that color's own yard).
+    const ARM_HOME = { top: 'green', right: 'yellow', bottom: 'blue', left: 'red' };
+    const YARD_COLOR = { topLeft: 'red', topRight: 'green', bottomRight: 'yellow', bottomLeft: 'blue' };
+
+    function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+    function starPoints(cx, cy, outerR, innerR) {
+      const pts = [];
+      for (let i = 0; i < 10; i++) {
+        const r = i % 2 === 0 ? outerR : innerR;
+        const angle = -Math.PI / 2 + (Math.PI / 5) * i;
+        pts.push((cx + r * Math.cos(angle)).toFixed(1) + ',' + (cy + r * Math.sin(angle)).toFixed(1));
+      }
+      return pts.join(' ');
+    }
+
+    // ---- arm cells ----
+    const cells = [];
+    function addCell(c, r, fill) {
+      cells.push({ x: c * CELL, y: r * CELL, w: CELL, h: CELL, fill, stroke: NEUTRAL.line });
+    }
+    for (let r = 0; r < 6; r++) for (let c = 6; c <= 8; c++) addCell(c, r, c === 7 ? COLORS[ARM_HOME.top].light : NEUTRAL.square);
+    for (let r = 9; r < 15; r++) for (let c = 6; c <= 8; c++) addCell(c, r, c === 7 ? COLORS[ARM_HOME.bottom].light : NEUTRAL.square);
+    for (let c = 0; c < 6; c++) for (let r = 6; r <= 8; r++) addCell(c, r, r === 7 ? COLORS[ARM_HOME.left].light : NEUTRAL.square);
+    for (let c = 9; c < 15; c++) for (let r = 6; r <= 8; r++) addCell(c, r, r === 7 ? COLORS[ARM_HOME.right].light : NEUTRAL.square);
+
+    // ---- center wedges ----
+    const CS = 144, CE = 216, CX = 180, CY = 180;
+    const wedges = [
+      { points: `${CS},${CS} ${CE},${CS} ${CX},${CY}`, fill: COLORS[ARM_HOME.top].base },
+      { points: `${CE},${CS} ${CE},${CE} ${CX},${CY}`, fill: COLORS[ARM_HOME.right].base },
+      { points: `${CE},${CE} ${CS},${CE} ${CX},${CY}`, fill: COLORS[ARM_HOME.bottom].base },
+      { points: `${CS},${CE} ${CS},${CS} ${CX},${CY}`, fill: COLORS[ARM_HOME.left].base },
+    ];
+
+    // ---- yards ----
+    const turn = this.props.turn || 'red';
+    const yardDefs = [
+      { x: 0, y: 0, color: YARD_COLOR.topLeft },
+      { x: 216, y: 0, color: YARD_COLOR.topRight },
+      { x: 0, y: 216, color: YARD_COLOR.bottomLeft },
+      { x: 216, y: 216, color: YARD_COLOR.bottomRight },
+    ];
+    const yards = [];
+    const yardTokens = [];
+    yardDefs.forEach((yd) => {
+      const c = COLORS[yd.color];
+      const isActive = yd.color === turn;
+      yards.push({
+        x: yd.x, y: yd.y, size: 144,
+        bgFill: c.light,
+        trayX: yd.x + 18, trayY: yd.y + 18, traySize: 108,
+        trayFill: '#FFFFFF',
+        ringStroke: c.deep, ringWidth: isActive ? 4 : 0,
+      });
+      [[42, 42], [102, 42], [42, 102], [102, 102]].forEach(([lx, ly]) => {
+        yardTokens.push({ cx: yd.x + lx, cy: yd.y + ly, base: c.base, deep: c.deep, scale: 1.2 });
+      });
+    });
+
+    // ---- sample mid-track tokens (illustrative placement) ----
+    const trackTokens = [
+      { cx: 1 * CELL + 12, cy: 6 * CELL + 12, color: 'red' },
+      { cx: 6 * CELL + 12, cy: 2 * CELL + 12, color: 'green' },
+      { cx: 10 * CELL + 12, cy: 7 * CELL + 12, color: 'yellow' },
+      { cx: 8 * CELL + 12, cy: 12 * CELL + 12, color: 'blue' },
+    ].map((t) => ({ cx: t.cx, cy: t.cy, base: COLORS[t.color].base, deep: COLORS[t.color].deep, scale: 0.85 }));
+
+    // ---- safe squares (illustrative, one per arm) ----
+    const stars = [
+      { c: 8, r: 4 }, { c: 12, r: 6 }, { c: 6, r: 10 }, { c: 3, r: 8 },
+    ].map((s) => ({ points: starPoints(s.c * CELL + 12, s.r * CELL + 12, 7, 3) }));
+
+    // ---- HUD dice (flat isometric cube) ----
+    const diceValue = Math.min(6, Math.max(1, this.props.diceValue ?? 4));
+    const PIP_LAYOUT = {
+      1: [[0.5, 0.5]],
+      2: [[0.28, 0.28], [0.72, 0.72]],
+      3: [[0.28, 0.28], [0.5, 0.5], [0.72, 0.72]],
+      4: [[0.28, 0.28], [0.72, 0.28], [0.28, 0.72], [0.72, 0.72]],
+      5: [[0.28, 0.28], [0.72, 0.28], [0.5, 0.5], [0.28, 0.72], [0.72, 0.72]],
+      6: [[0.28, 0.22], [0.72, 0.22], [0.28, 0.5], [0.72, 0.5], [0.28, 0.78], [0.72, 0.78]],
+    };
+    const fx = 4, fy = 8, fs = 30, d = 8;
+    const dice = {
+      topPts: `${fx},${fy} ${fx + d},${fy - d} ${fx + fs + d},${fy - d} ${fx + fs},${fy}`,
+      sidePts: `${fx + fs},${fy} ${fx + fs + d},${fy - d} ${fx + fs + d},${fy - d + fs} ${fx + fs},${fy + fs}`,
+      fx, fy, fs,
+      pips: PIP_LAYOUT[diceValue].map(([px, py]) => ({ cx: fx + px * fs, cy: fy + py * fs, r: 2.6 })),
+    };
+
+    return {
+      boardBg: NEUTRAL.bg,
+      cells, wedges, yards, yardTokens, trackTokens, stars, dice,
+      turnLabel: `${cap(turn)}'s Turn`,
+      turnBase: COLORS[turn].base,
+      turnDeep: COLORS[turn].deep,
+      turnLight: COLORS[turn].light,
+    };
+  }
+}
+</script>
+</body>
+</html>
