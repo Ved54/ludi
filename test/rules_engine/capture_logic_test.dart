@@ -29,7 +29,14 @@ void main() {
       expect(isSafeSquare(39), isTrue);
     });
 
-    test('non-start squares are not safe', () {
+    test('star squares are also safe', () {
+      expect(isSafeSquare(9), isTrue);
+      expect(isSafeSquare(22), isTrue);
+      expect(isSafeSquare(35), isTrue);
+      expect(isSafeSquare(48), isTrue);
+    });
+
+    test('non-safe squares are not safe', () {
       expect(isSafeSquare(1), isFalse);
       expect(isSafeSquare(50), isFalse);
     });
@@ -77,6 +84,22 @@ void main() {
       ]);
 
       expect(checkCapture(13, PlayerColor.red, state), isNull);
+    });
+
+    test('returns null on a star square even if an opponent sits there', () {
+      final greenToken = Token(
+        id: 'g1',
+        color: PlayerColor.green,
+        distance: 10,
+        state: TokenState.active,
+      ); // shared square = 13 + 10 - 1 = 22, a star square = safe
+
+      final state = buildState(players: [
+        Player(color: PlayerColor.red, startSquare: 0, tokens: []),
+        Player(color: PlayerColor.green, startSquare: 13, tokens: [greenToken]),
+      ]);
+
+      expect(checkCapture(22, PlayerColor.red, state), isNull);
     });
 
     test('ignores tokens of the moving color (no self-capture)', () {
