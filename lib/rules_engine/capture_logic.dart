@@ -17,6 +17,13 @@ const Map<PlayerColor, int> startSquares = {
   PlayerColor.blue: 39,
 };
 
+/// The 4 additional safe squares beyond each color's own start — classic
+/// Ludo's 8-safe-square board (A1 design: design/visual_style_guide.md).
+/// Unlike [startSquares], these aren't tied to any one color; any token
+/// may land here safely. Spaced a quarter of the track apart, offset 9
+/// ahead of each start square (see board/A2 for the visual layout).
+const List<int> starSquares = [9, 22, 35, 48];
+
 /// Maps a token's private [distance] (1-51, shared-track range) to its
 /// absolute index on the shared 52-square track (0-51).
 int toSharedSquare(PlayerColor color, int distance) {
@@ -24,9 +31,10 @@ int toSharedSquare(PlayerColor color, int distance) {
   return (start + distance - 1) % trackLength;
 }
 
-/// Safe squares: each color's start square. No capture happens here.
+/// Safe squares: each color's start square, plus the 4 star squares.
+/// No capture happens here.
 bool isSafeSquare(int square) {
-  return startSquares.values.contains(square);
+  return startSquares.values.contains(square) || starSquares.contains(square);
 }
 
 /// Direction-agnostic capture check — same function serves forward and
