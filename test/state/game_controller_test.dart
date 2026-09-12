@@ -36,7 +36,23 @@ void main() {
 
   group('GameController.rollDice', () {
     test('rolls, updates state, and notifies listeners', () {
-      final controller = GameController();
+      // An active (already-out) token has a legal move for any roll 1-6,
+      // so lastDiceValue is guaranteed to stay set regardless of the real
+      // roll — a fresh, all-yard GameController() would instead auto-skip
+      // (and reset lastDiceValue to 0) on the 5/6 of rolls that aren't a
+      // 6, since a yard token can only leave the yard on a 6.
+      final token = Token(
+        id: 'r1',
+        color: PlayerColor.red,
+        distance: 5,
+        state: TokenState.active,
+      );
+      final state = buildState(
+        players: [
+          Player(color: PlayerColor.red, startSquare: 0, tokens: [token]),
+        ],
+      );
+      final controller = GameController(initialState: state);
       var notified = 0;
       controller.addListener(() => notified++);
 
@@ -48,6 +64,32 @@ void main() {
   });
 
   group('GameController.selectMove', () {
+    test('rolling a 6 keeps the turn with the same player (bonus roll)', () {
+      final token = Token(
+        id: 'r1',
+        color: PlayerColor.red,
+        distance: 10,
+        state: TokenState.active,
+      );
+      final state = buildState(
+        players: [
+          Player(color: PlayerColor.red, startSquare: 0, tokens: [token]),
+          Player(
+            color: PlayerColor.green,
+            startSquare: 13,
+            tokens: [Token(id: 'g1', color: PlayerColor.green)],
+          ),
+        ],
+      );
+      state.lastDiceValue = 6;
+      final controller = GameController(initialState: state);
+
+      controller.selectMove(Move(token: token, newDistance: 16, isBackward: false));
+
+      expect(controller.state.currentPlayerIndex, 0); // still red
+      expect(controller.state.phase, GamePhase.rolling); // ready to roll again
+    });
+
     test('applies the move, fires onMoveAnimated, and notifies', () {
       final token = Token(
         id: 'r1',

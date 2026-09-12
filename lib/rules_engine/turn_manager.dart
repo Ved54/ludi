@@ -17,6 +17,7 @@ void rollDice(GameState state, {Random? random}) {
   final player = state.players[state.currentPlayerIndex];
   final diceValue = rollDie(random);
   state.lastDiceValue = diceValue;
+  state.lastRoll = diceValue; // display value — survives an auto-skip below
 
   final moves = <Move>[];
   for (final token in player.tokens) {
@@ -36,6 +37,12 @@ void rollDice(GameState state, {Random? random}) {
 /// captured opponent token back to its yard, and moves the phase to
 /// animating — GameController (V6) reacts to this via its
 /// onMoveAnimated/onCapture callbacks before calling [completeTurn].
+///
+/// Also tallies this move's bonus rolls onto state.bonusRollsRemaining:
+/// rolling a 6, capturing, and finishing a token each grant one,
+/// independently — a single move can stack more than one (e.g. finishing
+/// a token with a roll of 6 grants two). No cap on chaining these; every
+/// 6 grants its bonus regardless of how many were rolled in a row.
 void applyMove(GameState state, Move move) {
   final token = move.token;
   token.distance = move.newDistance;
@@ -47,16 +54,30 @@ void applyMove(GameState state, Move move) {
     captured.state = TokenState.yard;
   }
 
+  var bonus = 0;
+  if (state.lastDiceValue == 6) bonus++;
+  if (captured != null) bonus++;
+  if (token.state == TokenState.finished) bonus++;
+  state.bonusRollsRemaining += bonus;
+
   state.phase = GamePhase.animating;
 }
 
 /// Ends the current player's turn: declares a win if all of their tokens
-/// have finished, otherwise clears the roll/legal-moves and hands play to
-/// the next player.
+/// have finished. Otherwise, if this move earned any bonus rolls, the same
+/// player goes again (consuming one); only once none remain does play
+/// actually pass to the next player.
 void completeTurn(GameState state) {
   final player = state.players[state.currentPlayerIndex];
   if (_hasWon(player)) {
     state.phase = GamePhase.gameOver;
+    return;
+  }
+  if (state.bonusRollsRemaining > 0) {
+    state.bonusRollsRemaining--;
+    state.lastDiceValue = 0;
+    state.legalMoves = [];
+    state.phase = GamePhase.rolling;
     return;
   }
   advanceTurn(state);
@@ -68,6 +89,7 @@ void advanceTurn(GameState state) {
       (state.currentPlayerIndex + 1) % state.players.length;
   state.lastDiceValue = 0;
   state.legalMoves = [];
+  state.bonusRollsRemaining = 0;
   state.phase = GamePhase.rolling;
 }
 

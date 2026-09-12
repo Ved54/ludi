@@ -16,6 +16,10 @@ import '../ludi_theme.dart';
 /// back instantly from GameController.rollDice(), but the display holds
 /// off revealing it — flickering through random faces for ~600ms with a
 /// tumble effect — before locking onto the true value.
+///
+/// The rolled number is read from GameState.lastRoll (a display-only value
+/// that survives the turn auto-skipping), not lastDiceValue — so a non-6
+/// roll in a fresh game still shows what came up before the turn passes.
 class DiceComponent extends PositionComponent with TapCallbacks {
   DiceComponent({required this.controller})
       : super(size: Vector2(_faceSize + _depth, _faceSize + _depth + 12));
@@ -27,10 +31,16 @@ class DiceComponent extends PositionComponent with TapCallbacks {
   static const Duration _rollDuration = Duration(milliseconds: 600);
   static const Duration _flickerInterval = Duration(milliseconds: 90);
 
+  /// How long the result stays at full brightness after the tumble ends,
+  /// before dimming to invite the next tap — long enough to read it even
+  /// when the turn skipped straight past.
+  static const double _resultHoldSeconds = 1.2;
+
   final Random _random = Random();
   bool _isRolling = false;
   int _displayPips = 1;
   double _flickerElapsed = 0;
+  double _resultHold = 0;
 
   static const Map<int, List<List<double>>> _pipLayout = {
     1: [[0.5, 0.5]],
@@ -50,8 +60,11 @@ class DiceComponent extends PositionComponent with TapCallbacks {
         _flickerElapsed = 0;
         _displayPips = 1 + _random.nextInt(6);
       }
-    } else if (controller.state.lastDiceValue > 0) {
-      _displayPips = controller.state.lastDiceValue;
+    } else {
+      if (_resultHold > 0) _resultHold -= dt;
+      if (controller.state.lastRoll > 0) {
+        _displayPips = controller.state.lastRoll;
+      }
     }
   }
 
@@ -66,7 +79,11 @@ class DiceComponent extends PositionComponent with TapCallbacks {
       RotateEffect.by(
         2 * pi,
         EffectController(duration: seconds, curve: Curves.easeOut),
-        onComplete: () => _isRolling = false,
+        onComplete: () {
+          _isRolling = false;
+          _displayPips = controller.state.lastRoll;
+          _resultHold = _resultHoldSeconds;
+        },
       ),
     );
     add(
@@ -84,9 +101,14 @@ class DiceComponent extends PositionComponent with TapCallbacks {
 
   @override
   void render(Canvas canvas) {
-    // Idle (nothing rolled yet this turn) reads as dimmed, inviting a tap.
-    final idle = !_isRolling && controller.state.lastDiceValue == 0;
-    final opacity = idle ? 0.55 : 1.0;
+    final neverRolled = controller.state.lastRoll == 0;
+    // Dimmed while waiting for a tap — but not right after a roll (hold
+    // the result bright long enough to read), and not mid-tumble.
+    final prompting = !_isRolling &&
+        _resultHold <= 0 &&
+        controller.state.phase == GamePhase.rolling;
+    final dim = neverRolled || prompting;
+    final opacity = dim ? 0.55 : 1.0;
 
     canvas.drawOval(
       Rect.fromCenter(
@@ -132,7 +154,9 @@ class DiceComponent extends PositionComponent with TapCallbacks {
         ..strokeWidth = 1,
     );
 
-    if (!idle) {
+    // Pips show while tumbling and any time a value has ever been rolled —
+    // dimmed with the rest of the cube when waiting for the next tap.
+    if (_isRolling || !neverRolled) {
       final pipPaint = Paint()..color = LudiNeutral.textPrimary.withValues(alpha: opacity);
       for (final p in _pipLayout[_displayPips]!) {
         canvas.drawCircle(

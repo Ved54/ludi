@@ -79,7 +79,7 @@ void main() {
       expect(moves.first.newDistance, 58);
     });
 
-    test('a yard token can move forward onto the shared track', () {
+    test('a yard token can only leave on a roll of exactly 6', () {
       final redToken = Token(id: 'r1', color: PlayerColor.red);
       final state = buildState(
         players: [
@@ -89,9 +89,24 @@ void main() {
 
       final moves = getLegalMoves(redToken, 6, state);
 
+      // Entering uses the whole roll — lands on distance 1 (the color's
+      // own start/safe square), not distance 6.
       expect(moves.length, 1);
-      expect(moves.first.newDistance, 6);
+      expect(moves.first.newDistance, 1);
       expect(moves.first.isBackward, isFalse);
+    });
+
+    test('a yard token has no legal move on any roll other than 6', () {
+      final redToken = Token(id: 'r1', color: PlayerColor.red);
+      final state = buildState(
+        players: [
+          Player(color: PlayerColor.red, startSquare: 0, tokens: [redToken]),
+        ],
+      );
+
+      for (final roll in [1, 2, 3, 4, 5]) {
+        expect(getLegalMoves(redToken, roll, state), isEmpty, reason: 'roll $roll');
+      }
     });
 
     test('forward move onto an opponent populates capturedToken', () {
