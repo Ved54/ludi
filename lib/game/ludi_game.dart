@@ -4,6 +4,7 @@ import 'package:flame/game.dart';
 
 import '../state/game_controller.dart';
 import 'components/board_component.dart';
+import 'components/dice_component.dart';
 import 'components/path_waypoints.dart';
 import 'components/token_component.dart';
 import 'ludi_theme.dart';
@@ -32,5 +33,15 @@ class LudiGame extends FlameGame {
         await board.add(TokenComponent(token: token));
       }
     }
+
+    // Bottom-center, below the board — dice is HUD-level, not part of the
+    // board's own coordinate space. Full HUD chrome (turn indicator, menu
+    // icons) is A6's job; this is just enough to place it sensibly.
+    final dice = DiceComponent(controller: controller);
+    dice.position = Vector2(
+      (size.x - dice.size.x) / 2,
+      size.y - dice.size.y - 24,
+    );
+    await add(dice);
   }
 }

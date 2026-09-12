@@ -8,9 +8,22 @@ import 'models/token.dart';
 /// (no overshoot, must land exactly).
 const int maxDistance = 58;
 
-/// Forward is always evaluated. Backward is only added to the returned list
-/// if it lands exactly on a capturable opponent token (see README Section 4).
+/// Forward is always evaluated (except a yard token, which only ever gets
+/// ONE possible move — see below). Backward is only added to the returned
+/// list if it lands exactly on a capturable opponent token (see README
+/// Section 4).
 List<Move> getLegalMoves(Token token, int diceValue, GameState state) {
+  // A yard token can only leave on a roll of exactly 6 — entering places it
+  // on its own start square (distance 1, the color's safe square), using
+  // the whole roll; it does not also advance further that same turn. No
+  // other move (forward-by-N, backward) exists for a yard token.
+  if (token.state == TokenState.yard) {
+    if (diceValue == 6) {
+      return [buildMove(token, 1, isBackward: false, state: state)];
+    }
+    return [];
+  }
+
   final moves = <Move>[];
 
   // Forward — always allowed if the destination is valid.
@@ -21,17 +34,15 @@ List<Move> getLegalMoves(Token token, int diceValue, GameState state) {
 
   // Backward — ONLY legal if it lands exactly on an opponent token (a kill).
   // No capturable opponent at that square -> backward is not offered at all.
-  if (token.state != TokenState.yard) {
-    final backwardDist = token.distance - diceValue;
-    if (backwardDist >= 1) {
-      // can't retreat into yard
-      final destSquare = toSharedSquare(token.color, backwardDist);
-      final wouldCapture = checkCapture(destSquare, token.color, state);
-      if (wouldCapture != null) {
-        moves.add(
-          buildMove(token, backwardDist, isBackward: true, state: state),
-        );
-      }
+  final backwardDist = token.distance - diceValue;
+  if (backwardDist >= 1) {
+    // can't retreat into yard
+    final destSquare = toSharedSquare(token.color, backwardDist);
+    final wouldCapture = checkCapture(destSquare, token.color, state);
+    if (wouldCapture != null) {
+      moves.add(
+        buildMove(token, backwardDist, isBackward: true, state: state),
+      );
     }
   }
 

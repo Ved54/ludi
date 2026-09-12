@@ -20,18 +20,23 @@ Vector2 _cellCenter(int col, int row) =>
 /// is red's start (Token.distance 1), matching README/capture_logic.dart's
 /// `startSquares[PlayerColor.red] == 0`.
 ///
-/// Derived and verified (not eyeballed): the ring walks each arm's two
-/// outer lanes plus the shared center-corner cell that joins them, with a
-/// short two-cell hop at each yard corner (skipping over that color's own
-/// private home-lane entrance, which is never part of the shared track).
-/// See the branch's commit notes for the derivation/verification script.
+/// No token ever stands on the center 3x3's corners or its middle —
+/// (6,6), (8,6), (6,8), (8,8), (7,7) — those are purely the decorative
+/// wedge. Each arm is self-contained instead: its two outer lanes connect
+/// through that arm's OWN home-lane innermost cell (e.g. green's own
+/// distance-57 cell at (7,5) also carries shared-track traffic turning
+/// the corner there), and consecutive arms join with a longer hop at each
+/// yard corner rather than cutting through the center. Derived and
+/// verified against capture_logic.dart's exact toSharedSquare/startSquares
+/// math, not eyeballed — see the branch's commit notes for the
+/// derivation/verification script.
 const List<List<int>> _sharedTrackCells = [
-  [1, 6], [2, 6], [3, 6], [4, 6], [5, 6], [6, 6], [6, 5], [6, 4], [6, 3],
-  [6, 2], [6, 1], [6, 0], [8, 0], [8, 1], [8, 2], [8, 3], [8, 4], [8, 5],
-  [8, 6], [9, 6], [10, 6], [11, 6], [12, 6], [13, 6], [14, 6], [14, 8],
-  [13, 8], [12, 8], [11, 8], [10, 8], [9, 8], [8, 8], [8, 9], [8, 10],
-  [8, 11], [8, 12], [8, 13], [8, 14], [6, 14], [6, 13], [6, 12], [6, 11],
-  [6, 10], [6, 9], [6, 8], [5, 8], [4, 8], [3, 8], [2, 8], [1, 8], [0, 8],
+  [1, 6], [2, 6], [3, 6], [4, 6], [5, 6], [5, 7], [5, 8], [4, 8], [3, 8],
+  [2, 8], [1, 8], [0, 8], [8, 0], [8, 1], [8, 2], [8, 3], [8, 4], [8, 5],
+  [7, 5], [6, 5], [6, 4], [6, 3], [6, 2], [6, 1], [6, 0], [14, 8], [13, 8],
+  [12, 8], [11, 8], [10, 8], [9, 8], [9, 7], [9, 6], [10, 6], [11, 6],
+  [12, 6], [13, 6], [14, 6], [6, 14], [6, 13], [6, 12], [6, 11], [6, 10],
+  [6, 9], [7, 9], [8, 9], [8, 10], [8, 11], [8, 12], [8, 13], [8, 14],
   [0, 6],
 ];
 
