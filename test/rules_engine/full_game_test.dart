@@ -39,6 +39,15 @@ void expectConsistent(GameState state, String where) {
     isNot(GamePhase.animating),
     reason: '$where: the controller never rests mid-move',
   );
+
+  // Finishers are done: all home, and never up to play again.
+  for (final color in state.finishOrder) {
+    final player = state.players.firstWhere((p) => p.color == color);
+    expect(player.tokens.every((t) => t.state == TokenState.finished), isTrue, reason: where);
+  }
+  if (state.phase != GamePhase.gameOver) {
+    expect(state.finishOrder, isNot(contains(state.currentPlayer.color)), reason: where);
+  }
 }
 
 void main() {
@@ -60,10 +69,14 @@ void main() {
         expectConsistent(state, 'seed $seed action $actions');
       }
 
+      // Play went on until a single player was left.
+      expect(state.finishOrder.length, state.players.length - 1, reason: 'seed $seed');
+      expect(state.finishOrder.toSet().length, state.finishOrder.length, reason: 'seed $seed');
+      final last = state.players.firstWhere((p) => p.color == state.standings.last);
       expect(
-        state.currentPlayer.tokens.every((t) => t.state == TokenState.finished),
-        isTrue,
-        reason: 'seed $seed winner',
+        last.tokens.every((t) => t.state == TokenState.finished),
+        isFalse,
+        reason: 'seed $seed: last place still had tokens out',
       );
     }
   });

@@ -5,6 +5,7 @@ import 'dice.dart';
 import 'legal_moves.dart';
 import 'models/game_state.dart';
 import 'models/move.dart';
+import 'models/player.dart';
 import 'models/token.dart';
 
 /// Rolls the die for the current player, gathers legal moves across all
@@ -75,24 +76,35 @@ List<Token> applyMove(GameState state, Move move) {
   return captured;
 }
 
-/// Ends the current move: declares a win if all of the current player's
-/// tokens have finished. Otherwise, if any bonus rolls are owed, the same
-/// player goes again (consuming one); only once none remain does play
-/// actually pass to the next player.
+/// Ends the current move. A player whose last token just came home takes
+/// the next place in [GameState.finishOrder] and sits out the rest of the
+/// game (any bonus rolls they were owed go with them); once only one
+/// player is left, the game is over. Otherwise, if any bonus rolls are
+/// owed, the same player goes again (consuming one); only once none
+/// remain does play actually pass to the next player.
 void completeTurn(GameState state) {
   _expectPhase(state, GamePhase.animating, 'complete a turn');
-  if (_hasWon(state)) {
-    state.legalMoves = [];
-    state.phase = GamePhase.gameOver;
+  final player = state.currentPlayer;
+  if (_allHome(player) && !state.finishOrder.contains(player.color)) {
+    state.finishOrder.add(player.color);
+    if (state.finishOrder.length >= state.players.length - 1) {
+      state.legalMoves = [];
+      state.phase = GamePhase.gameOver;
+      return;
+    }
+    advanceTurn(state);
     return;
   }
   _rollAgainOrPass(state);
 }
 
-/// Advances to the next player in turn order, resetting per-turn state.
+/// Advances to the next player in turn order who is still playing,
+/// resetting per-turn state.
 void advanceTurn(GameState state) {
-  state.currentPlayerIndex =
-      (state.currentPlayerIndex + 1) % state.players.length;
+  do {
+    state.currentPlayerIndex =
+        (state.currentPlayerIndex + 1) % state.players.length;
+  } while (state.finishOrder.contains(state.currentPlayer.color));
   state.lastDiceValue = 0;
   state.legalMoves = [];
   state.bonusRollsRemaining = 0;
@@ -110,8 +122,8 @@ void _rollAgainOrPass(GameState state) {
   state.phase = GamePhase.rolling;
 }
 
-bool _hasWon(GameState state) =>
-    state.currentPlayer.tokens.every((t) => t.state == TokenState.finished);
+bool _allHome(Player player) =>
+    player.tokens.every((t) => t.state == TokenState.finished);
 
 void _expectPhase(GameState state, GamePhase expected, String action) {
   if (state.phase != expected) {

@@ -12,6 +12,14 @@ const double pawnHeight = 24;
 
 final Path _silhouette = _buildSilhouette();
 
+/// The deep-colored band across the base, pre-cut to the silhouette so
+/// painting a pawn needs no clip (a clip per pawn per frame adds up).
+final Path _skirt = Path.combine(
+  PathOperation.intersect,
+  _silhouette,
+  Path()..addRect(const Rect.fromLTWH(-9, -3.2, 18, 4)),
+);
+
 Path _buildSilhouette() {
   final base = Path()
     ..addRRect(
@@ -82,13 +90,7 @@ void paintPawn(
   canvas.drawPath(_silhouette, Paint()..color = palette.base.withValues(alpha: opacity));
 
   // Deep-colored skirt and a small specular dot — depth without gradients.
-  canvas.save();
-  canvas.clipPath(_silhouette);
-  canvas.drawRect(
-    const Rect.fromLTWH(-9, -3.2, 18, 4),
-    Paint()..color = palette.deep.withValues(alpha: 0.9 * opacity),
-  );
-  canvas.restore();
+  canvas.drawPath(_skirt, Paint()..color = palette.deep.withValues(alpha: 0.9 * opacity));
   canvas.drawOval(
     Rect.fromCenter(center: const Offset(-2, -20.2), width: 3.6, height: 2.6),
     Paint()..color = const Color(0xFFFFFFFF).withValues(alpha: 0.55 * opacity),

@@ -6,6 +6,7 @@ import 'package:flame/components.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 
+import '../rules_engine/legal_moves.dart' show maxDistance;
 import '../rules_engine/models/game_state.dart';
 import '../rules_engine/models/move.dart';
 import '../rules_engine/models/player.dart';
@@ -13,6 +14,7 @@ import '../rules_engine/models/token.dart';
 import '../state/game_controller.dart';
 import 'components/board_component.dart';
 import 'components/dice_component.dart';
+import 'components/move_hints_component.dart';
 import 'components/path_waypoints.dart';
 import 'components/player_pod_component.dart';
 import 'components/toast_component.dart';
@@ -27,8 +29,13 @@ import 'ludi_theme.dart';
 /// resolution into a readable sequence and holds input until it's over:
 ///
 ///   tap die -> tumble -> real roll lands -> (auto-move if only one choice)
-///   tap token -> hop square by square -> impact / knockback home / sparkle
-///   -> controller.completeMove() -> callout -> die travels to next player
+///   tap token -> hop square by square -> impact + callout / knockback home
+///   / sparkle -> controller.completeMove() -> die travels to next player
+///   (or stays, "Roll again")
+///
+/// Everything on screen — token positions, the HUD's home count, whose
+/// turn it looks like — follows what has been *shown*, never the engine
+/// state that is already a move ahead during an animation.
 ///
 /// Needs a controller built with `holdMovesForAnimation: true`, so the
 /// turn doesn't resolve until the animation has played.
@@ -49,11 +56,29 @@ class LudiGame extends FlameGame {
   /// Token picked by a tap when it had more than one option.
   Token? selectedToken;
 
-  /// Tokens that can move this roll (they bob), empty while locked.
-  Set<Token> movableTokens = const {};
-
   /// Short instruction shown in the active player's pod.
   String? prompt = 'Tap to roll';
+
+  /// Tokens that can move this roll (they bob), empty while locked.
+  Set<Token> get movableTokens {
+    if (!canSelect) return const {};
+    final moves = controller.currentLegalMoves;
+    if (!identical(moves, _movableFor)) {
+      _movableFor = moves;
+      _movable = {for (final m in moves) m.token};
+    }
+    return _movable;
+  }
+
+  List<Move>? _movableFor;
+  Set<Token> _movable = const {};
+
+  /// Tokens of [color] the board currently shows at home. The HUD counts
+  /// these rather than the engine's tally, which is already a move ahead
+  /// while the finishing hop is still in the air.
+  int shownHomeCount(PlayerColor color) => _tokens.values
+      .where((c) => c.token.color == color && c.shownDistance == maxDistance)
+      .length;
 
   /// Space the Flutter shell keeps free at the top for its buttons.
   static const double topInset = 56;
@@ -64,6 +89,10 @@ class LudiGame extends FlameGame {
   final Map<Token, TokenComponent> _tokens = {};
   final Map<PlayerColor, PlayerPodComponent> _pods = {};
   bool _busy = false;
+
+  /// The token picked on the player's behalf when it is the only one that
+  /// can move but has two options — tapping empty board returns to it.
+  Token? _autoPick;
 
   GameState get _state => controller.state;
 
@@ -77,6 +106,7 @@ class LudiGame extends FlameGame {
   Future<void> onLoad() async {
     _board = BoardComponent(seated: {for (final p in _state.players) p.color});
     await add(_board);
+    await _board.addAll([MoveHintsComponent.landings(), MoveHintsComponent.targets()]);
     for (final player in _state.players) {
       for (final token in player.tokens) {
         final component = TokenComponent(token: token);
@@ -102,7 +132,7 @@ class LudiGame extends FlameGame {
     super.onGameResize(size);
     if (isLoaded) {
       _layout();
-      if (!_busy) _dice.position = _pods[activeColor]!.diceSlot;
+      if (!_dice.isTraveling) _dice.position = _pods[activeColor]!.diceSlot;
     }
   }
 
@@ -139,12 +169,23 @@ class LudiGame extends FlameGame {
         ..size = podSize
         ..position = spots[pod.color]!;
     }
-    _toast.position = Vector2(left + boardPx / 2, boardTop + boardPx / 2);
+    _toast
+      ..home = Vector2(left + boardPx / 2, boardTop + boardPx / 2)
+      ..bounds = Rect.fromLTWH(left, boardTop, boardPx, boardPx)
+      ..position = _toast.home;
+  }
+
+  /// Shows a callout floating just above board square [local] — near the
+  /// action but clear of the token it is about (below it instead on the
+  /// board's top rows, where above would run into the HUD).
+  void _callout(String text, Vector2 local, Color accent) {
+    const lift = 44.0; // board units, a little under two cells
+    final spot = local.y - lift < cellSize ? local + Vector2(0, lift) : local - Vector2(0, lift);
+    _toast.show(text, accent: accent, at: _board.basePosition + spot * _board.scale.x);
   }
 
   @override
   void update(double dt) {
-    movableTokens = canSelect ? {for (final m in controller.currentLegalMoves) m.token} : const {};
     _layoutTokens();
     super.update(dt);
   }
@@ -209,9 +250,9 @@ class LudiGame extends FlameGame {
   Future<void> requestRoll() async {
     if (!canRoll) return;
     _busy = true;
-    selectedToken = null;
+    selectedToken = _autoPick = null;
     prompt = 'Rolling…';
-    final roller = _state.currentPlayerIndex;
+    final roller = _state.currentPlayer;
     _haptic(HapticFeedback.lightImpact);
 
     await _dice.tumble();
@@ -220,24 +261,29 @@ class LudiGame extends FlameGame {
     _haptic(HapticFeedback.mediumImpact);
 
     if (_state.phase == GamePhase.selecting) {
-      final only = _onlyChoice(_state.legalMoves);
+      final moves = _state.legalMoves;
+      final only = _onlyChoice(moves);
       if (only != null) {
         prompt = 'Moving…';
         await _wait(LudiMotion.readBeat);
         await _play(only);
         return;
       }
-      prompt = 'Pick a token';
+      // One token (or a stack of identical ones) with a forward and a
+      // backward option: pick it for the player and show both.
+      if (moves.every((m) => m.token.distance == moves.first.token.distance)) {
+        _autoPick = moves.first.token;
+      }
+      _choose(_autoPick);
       _busy = false;
       return;
     }
 
-    // Wasted roll: nothing could move.
-    final keepsTurn = _state.currentPlayerIndex == roller;
-    _toast.show(
-      keepsTurn ? 'No moves · roll again' : 'No moves',
-      accent: playerPalette[activeColor]!.base,
-    );
+    // Wasted roll: nothing could move. Say why in the pod, where the
+    // player is looking, and shake the die "no".
+    final waiting = roller.tokens.every((t) => t.distance == 0 || t.distance == maxDistance);
+    prompt = waiting ? 'Need a 6' : 'No moves';
+    _dice.shakeNo();
     await _wait(LudiMotion.wastedRollHold);
     await _nextTurn();
   }
@@ -264,59 +310,83 @@ class LudiGame extends FlameGame {
   /// one of them plays it. A marker can also be tapped directly.
   void onBoardTap(Vector2 at) {
     if (!canSelect) return;
+    final moves = controller.currentLegalMoves;
     final picked = selectedToken;
 
     // A picked token's own options win over anything else under the finger.
     if (picked != null) {
-      final option = _markerAt(at, controller.currentLegalMoves.where((m) => m.token == picked));
+      final option = _nearestMarker(at, moves.where((m) => m.token == picked));
       if (option != null) {
-        _play(option);
+        _play(option.$1);
         return;
       }
     }
 
-    final token = _movableTokenAt(at);
-    if (token != null) {
-      final options = controller.currentLegalMoves.where((m) => m.token == token).toList();
-      if (options.map((m) => m.newDistance).toSet().length == 1) {
-        _play(options.first);
-      } else {
-        selectedToken = token;
-        _haptic(HapticFeedback.selectionClick);
-      }
-      return;
-    }
-
-    final marker = _markerAt(at, controller.currentLegalMoves);
-    if (marker != null) {
-      _play(marker);
+    // Otherwise whatever is closest: a movable token, or — only while no
+    // token is picked, since only then are all markers showing — a marker.
+    // A finger right on a token's body always means that token.
+    final token = _nearestToken(at);
+    final marker = picked == null ? _nearestMarker(at, moves) : null;
+    if (token != null &&
+        (marker == null || token.$2 <= _onTokenRadius || token.$2 <= marker.$2)) {
+      _tapToken(token.$1);
+    } else if (marker != null) {
+      _tapMarker(marker.$1);
     } else {
-      selectedToken = null;
+      _choose(_autoPick);
     }
   }
 
-  Token? _movableTokenAt(Vector2 at) {
-    Token? nearest;
-    var best = 16.0;
+  /// Finger slop for tokens and markers, board units (one cell = 24).
+  static const double _tapRadius = 20;
+
+  /// Closer than this to a token's body, a tap is on the token.
+  static const double _onTokenRadius = 11;
+
+  void _tapToken(Token token) {
+    final options = controller.currentLegalMoves.where((m) => m.token == token).toList();
+    if (options.map((m) => m.newDistance).toSet().length == 1) {
+      _play(options.first);
+    } else {
+      _choose(token);
+      _haptic(HapticFeedback.selectionClick);
+    }
+  }
+
+  /// Two different tokens can reach one square (one forward, one striking
+  /// back); then the marker alone doesn't say which to move.
+  void _tapMarker(Move move) {
+    final rivals = controller.currentLegalMoves.where(
+      (m) => m.newDistance == move.newDistance && m.token.distance != move.token.distance,
+    );
+    if (rivals.isEmpty) {
+      _play(move);
+    } else {
+      prompt = 'Tap a token';
+      _haptic(HapticFeedback.selectionClick);
+    }
+  }
+
+  /// Picks [token] (null: none) and says what the player should do next.
+  void _choose(Token? token) {
+    selectedToken = token;
+    prompt = token == null ? 'Pick a token' : 'Pick a square';
+  }
+
+  (Token, double)? _nearestToken(Vector2 at) {
+    (Token, double)? nearest;
     for (final token in movableTokens) {
       final distance = _tokens[token]!.bodyCenter.distanceTo(at);
-      if (distance < best) {
-        best = distance;
-        nearest = token;
-      }
+      if (distance < (nearest?.$2 ?? _tapRadius)) nearest = (token, distance);
     }
     return nearest;
   }
 
-  Move? _markerAt(Vector2 at, Iterable<Move> moves) {
-    Move? nearest;
-    var best = 15.0;
+  (Move, double)? _nearestMarker(Vector2 at, Iterable<Move> moves) {
+    (Move, double)? nearest;
     for (final move in moves) {
       final distance = positionForDistance(move.token.color, move.newDistance).distanceTo(at);
-      if (distance < best) {
-        best = distance;
-        nearest = move;
-      }
+      if (distance < (nearest?.$2 ?? _tapRadius)) nearest = (move, distance);
     }
     return nearest;
   }
@@ -324,16 +394,19 @@ class LudiGame extends FlameGame {
   Future<void> _play(Move move) async {
     final mover = _tokens[move.token]!;
     final from = mover.shownDistance;
-    final roll = _state.lastDiceValue;
-    final mover0 = _state.currentPlayerIndex;
-    final captured = <Token>[];
-    controller.onCapture = captured.add;
+    // Who gets captured is read off the engine state before and after,
+    // rather than by borrowing the controller's onCapture callback, which
+    // belongs to other listeners (sound).
+    final onTrack = [
+      for (final t in _tokens.keys)
+        if (t.color != move.token.color && t.distance > 0) t,
+    ];
     controller.selectMove(move);
-    controller.onCapture = null;
     if (_state.phase != GamePhase.animating) return; // not a legal move
+    final captured = [for (final t in onTrack) if (t.distance == 0) t];
 
     _busy = true;
-    selectedToken = null;
+    selectedToken = _autoPick = null;
     prompt = 'Moving…';
     final color = move.token.color;
 
@@ -346,17 +419,21 @@ class LudiGame extends FlameGame {
       onLand: () => _haptic(HapticFeedback.selectionClick),
     );
     mover.shownDistance = move.newDistance;
+    _layoutTokens(); // back into the ground layer before anything else flies
 
+    // Only the moments worth stopping for get the big callout, right on
+    // impact; a bonus roll is announced in the pod (see _nextTurn).
     final finished = move.token.state == TokenState.finished;
-    String? callout;
+    final accent = playerPalette[color]!.base;
+    final landing = positionForDistance(color, move.newDistance);
     if (captured.isNotEmpty) {
-      callout = move.isBackward ? 'Backstrike!' : 'Captured!';
+      _callout(move.isBackward ? 'Backstrike!' : 'Captured!', landing, accent);
       _board
         ..shake()
         ..add(
           captureBurst(
-            positionForDistance(color, move.newDistance),
-            attacker: playerPalette[color]!.base,
+            landing,
+            attacker: accent,
             victim: playerPalette[captured.first.color]!.base,
           )..priority = 900,
         );
@@ -365,34 +442,36 @@ class LudiGame extends FlameGame {
         for (final token in captured) _knockHome(_tokens[token]!),
       ]);
     } else if (finished) {
-      callout = 'Home!';
+      _callout('Home!', landing, accent);
       _board.add(
-        homeSparkle(positionForDistance(color, move.newDistance), playerPalette[color]!.base)
+        homeSparkle(landing, accent)
           ..priority = 900,
       );
       _haptic(HapticFeedback.mediumImpact);
     }
 
+    final placesBefore = _state.finishOrder.length;
     controller.completeMove();
 
-    if (_state.phase == GamePhase.gameOver) {
-      prompt = 'Winner!';
-      _toast.show('${colorLabel(color)} wins!', accent: playerPalette[color]!.base, hold: 2.5);
-      add(confetti(size, winner: playerPalette[color]!.base)..priority = 100);
+    // Last token home: this player takes a place. The first gets the
+    // confetti; the rest of the table plays on for the other places.
+    final place = _state.finishOrder.length;
+    if (place > placesBefore) {
+      prompt = null; // the pod shows the place instead
       _haptic(HapticFeedback.heavyImpact);
-      return; // stays locked — the Flutter shell takes over
+      if (place == 1) {
+        _toast.show('${colorLabel(color)} wins!', accent: accent, hold: 2.2);
+        add(confetti(size, winner: accent)..priority = 100);
+      } else {
+        _toast.show('${colorLabel(color)} takes ${placeLabel(place)}!', accent: accent, hold: 1.6);
+      }
+      await _wait(LudiMotion.placeBeat);
     }
 
-    final again = _state.currentPlayerIndex == mover0;
-    if (again) {
-      final reason = callout ?? (roll == 6 ? 'Six!' : null);
-      _toast.show(
-        reason == null ? 'Roll again' : '$reason Roll again',
-        accent: playerPalette[color]!.base,
-      );
-    } else if (callout != null) {
-      _toast.show(callout, accent: playerPalette[color]!.base);
+    if (_state.phase == GamePhase.gameOver) {
+      return; // stays locked — the Flutter shell shows the standings
     }
+
     await _nextTurn();
   }
 
@@ -405,18 +484,27 @@ class LudiGame extends FlameGame {
       spinTurns: 2,
     );
     victim.shownDistance = 0;
+    _layoutTokens();
   }
 
   /// Unlocks input for whoever plays next, sending the die over first
-  /// if the turn changed hands.
+  /// if the turn changed hands. A player who keeps the die is told so,
+  /// with the count when a move earned more than one bonus roll.
   Future<void> _nextTurn() async {
     final next = _state.currentPlayer.color;
-    if (next != activeColor) {
+    final again = next == activeColor;
+    if (!again) {
       prompt = null;
       activeColor = next;
       await _dice.travelTo(_pods[next]!.diceSlot);
     }
-    prompt = 'Tap to roll';
+    _dice.position = _pods[next]!.diceSlot; // in case the screen resized
+    final rolls = _state.bonusRollsRemaining + 1;
+    prompt = !again
+        ? 'Tap to roll'
+        : rolls > 1
+        ? 'Roll again ×$rolls'
+        : 'Roll again';
     _busy = false;
   }
 

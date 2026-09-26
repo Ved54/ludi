@@ -193,6 +193,38 @@ void main() {
       expect(controller.state.phase, GamePhase.gameOver);
       expect(controller.currentLegalMoves, isEmpty);
     });
+
+    test('with three players, the first finisher is only announced once the game ends', () {
+      final redLast = tokenAt(PlayerColor.red, 55, id: 'r3');
+      final greenLast = tokenAt(PlayerColor.green, 55, id: 'g3');
+      final controller = GameController(
+        initialState: stateWith([
+          playerWith(PlayerColor.red, [
+            for (var i = 0; i < 3; i++) tokenAt(PlayerColor.red, 57, id: 'r$i'),
+            redLast,
+          ]),
+          playerWith(PlayerColor.green, [
+            for (var i = 0; i < 3; i++) tokenAt(PlayerColor.green, 57, id: 'g$i'),
+            greenLast,
+          ]),
+          playerWith(PlayerColor.yellow, [Token(id: 'y0', color: PlayerColor.yellow)]),
+        ]),
+        random: ScriptedRandom([2]),
+      );
+      PlayerColor? winner;
+      controller.onGameOver = (c) => winner = c;
+
+      controller.rollDice();
+      controller.selectMove(moveTo(controller, redLast, 57));
+      expect(winner, isNull);
+      expect(controller.state.phase, GamePhase.rolling);
+      expect(controller.state.currentPlayer.color, PlayerColor.green);
+
+      controller.rollDice();
+      controller.selectMove(moveTo(controller, greenLast, 57));
+      expect(winner, PlayerColor.red);
+      expect(controller.state.standings, [PlayerColor.red, PlayerColor.green, PlayerColor.yellow]);
+    });
   });
 
   group('GameController with holdMovesForAnimation', () {

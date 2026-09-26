@@ -35,100 +35,111 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: LudiNeutral.boardBackground,
+      // Scrolls only when it can't fit — a small phone or a large system
+      // font — otherwise the spacers spread it over the full height.
       body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 28),
-              child: Column(
-                children: [
-                  const Spacer(flex: 3),
-                  const _Logo(),
-                  const SizedBox(height: 18),
-                  const Text(
-                    'Ludi',
-                    style: TextStyle(
-                      fontFamily: ludiFontFamily,
-                      fontSize: 64,
-                      height: 1,
-                      fontWeight: FontWeight.w900,
-                      color: LudiNeutral.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Classic Ludo — with a backward strike.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontFamily: ludiFontFamily,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: LudiNeutral.textSecondary,
-                    ),
-                  ),
-                  const Spacer(flex: 3),
-                  const Text(
-                    'PLAYERS',
-                    style: TextStyle(
-                      fontFamily: ludiFontFamily,
-                      fontSize: 12,
-                      letterSpacing: 1.6,
-                      fontWeight: FontWeight.w800,
-                      color: LudiNeutral.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      for (final count in _seats.keys) ...[
-                        if (count != _seats.keys.first) const SizedBox(width: 10),
-                        Expanded(
-                          child: _PlayerCountOption(
-                            colors: _seats[count]!,
-                            selected: _players == count,
-                            onTap: () => setState(() => _players = count),
+        child: LayoutBuilder(
+          builder: (context, viewport) => SingleChildScrollView(
+            child: Center(
+              child: SizedBox(
+                width: viewport.maxWidth.clamp(0.0, 420.0),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: viewport.maxHeight),
+                  child: IntrinsicHeight(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 28),
+                      child: Column(
+                        children: [
+                          const Spacer(flex: 3),
+                          const _Logo(),
+                          const SizedBox(height: 18),
+                          const Text(
+                            'Ludi',
+                            style: TextStyle(
+                              fontFamily: ludiFontFamily,
+                              fontSize: 64,
+                              height: 1,
+                              fontWeight: FontWeight.w900,
+                              color: LudiNeutral.textPrimary,
+                            ),
                           ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 22),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 58,
-                    child: FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: LudiNeutral.textPrimary,
-                        foregroundColor: LudiNeutral.surface,
-                        shape: const StadiumBorder(),
-                        elevation: 2,
-                        textStyle: const TextStyle(
-                          fontFamily: ludiFontFamily,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.4,
-                        ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Classic Ludo — with a backward strike.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontFamily: ludiFontFamily,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: LudiNeutral.textSecondary,
+                            ),
+                          ),
+                          const Spacer(flex: 3),
+                          const Text(
+                            'PLAYERS',
+                            style: TextStyle(
+                              fontFamily: ludiFontFamily,
+                              fontSize: 12,
+                              letterSpacing: 1.6,
+                              fontWeight: FontWeight.w800,
+                              color: LudiNeutral.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              for (final count in _seats.keys) ...[
+                                if (count != _seats.keys.first) const SizedBox(width: 10),
+                                Expanded(
+                                  child: _PlayerCountOption(
+                                    colors: _seats[count]!,
+                                    selected: _players == count,
+                                    onTap: () => setState(() => _players = count),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 22),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 58,
+                            child: FilledButton(
+                              style: FilledButton.styleFrom(
+                                backgroundColor: LudiNeutral.textPrimary,
+                                foregroundColor: LudiNeutral.surface,
+                                shape: const StadiumBorder(),
+                                elevation: 2,
+                                textStyle: const TextStyle(
+                                  fontFamily: ludiFontFamily,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.4,
+                                ),
+                              ),
+                              onPressed: _play,
+                              child: const Text('Play'),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          TextButton(
+                            onPressed: () => _showRules(context),
+                            style: TextButton.styleFrom(foregroundColor: LudiNeutral.textSecondary),
+                            child: const Text(
+                              'How to play',
+                              style: TextStyle(
+                                fontFamily: ludiFontFamily,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          const Spacer(),
+                        ],
                       ),
-                      onPressed: _play,
-                      child: const Text('Play'),
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  TextButton(
-                    onPressed: () => _showRules(context),
-                    style: TextButton.styleFrom(foregroundColor: LudiNeutral.textSecondary),
-                    child: const Text(
-                      'How to play',
-                      style: TextStyle(
-                        fontFamily: ludiFontFamily,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  const Spacer(),
-                ],
+                ),
               ),
             ),
           ),
@@ -138,8 +149,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-/// A tile of the board's center pinwheel with a pawn on each corner,
-/// every color sitting next to its own wedge's neighbor like on the board.
 class _Logo extends StatelessWidget {
   const _Logo();
 
@@ -303,14 +312,15 @@ class _Rules extends StatelessWidget {
     (Icons.rotate_right_rounded, 'Race clockwise', 'Go once round the board, then up your colored lane. Land exactly on home.'),
     (Icons.gps_fixed_rounded, 'Capture', 'Land on an opponent to send them back to their yard. Stars and start squares are safe.'),
     (Icons.undo_rounded, 'The twist: strike backward', 'You may move a token backward — but only if it lands on an opponent and captures it.'),
-    (Icons.replay_rounded, 'Bonus rolls', 'A 6, a capture, or bringing a token home earns another roll.'),
-    (Icons.emoji_events_rounded, 'Win', 'First to bring all four tokens home wins.'),
+    (Icons.replay_rounded, 'Bonus rolls', 'A 6, a capture, or bringing a token home each earn another roll — and they add up.'),
+    (Icons.emoji_events_rounded, 'Win', 'First to bring all four tokens home wins — the rest play on for the other places.'),
   ];
 
   @override
   Widget build(BuildContext context) {
+    // Scrollable: six rules don't fit a small phone or a large font.
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,

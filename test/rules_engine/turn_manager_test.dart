@@ -26,6 +26,27 @@ GameState redVsGreen(List<Token> red, List<Token> green) => stateWith([
   playerWith(PlayerColor.green, green),
 ]);
 
+/// All four seated in turn order; unlisted colors keep one yard token.
+GameState fourPlayers({
+  List<Token>? red,
+  List<Token>? green,
+  List<Token>? yellow,
+  List<Token>? blue,
+}) => stateWith([
+  for (final (color, tokens) in [
+    (PlayerColor.red, red),
+    (PlayerColor.green, green),
+    (PlayerColor.yellow, yellow),
+    (PlayerColor.blue, blue),
+  ])
+    playerWith(color, tokens ?? [Token(id: '${color.name}0', color: color)]),
+]);
+
+/// [count] of [color]'s tokens, already home.
+List<Token> homeTokens(PlayerColor color, int count) => [
+  for (var i = 0; i < count; i++) tokenAt(color, 57, id: '${color.name}$i'),
+];
+
 void main() {
   group('rollDice', () {
     test('sets lastDiceValue and moves to selecting when a move exists', () {
@@ -230,7 +251,7 @@ void main() {
   });
 
   group('completeTurn', () {
-    test('moves to gameOver when the current player has all tokens finished', () {
+    test('in a 2-player game, the first to bring all four home ends it', () {
       final last = tokenAt(PlayerColor.red, 56, id: 'r3');
       final state = redVsGreen(
         [
@@ -244,8 +265,40 @@ void main() {
       completeTurn(state);
 
       expect(state.phase, GamePhase.gameOver);
-      expect(state.currentPlayer.color, PlayerColor.red); // winner stays current
+      expect(state.finishOrder, [PlayerColor.red]);
+      expect(state.standings, [PlayerColor.red, PlayerColor.green]);
       expect(state.legalMoves, isEmpty);
+    });
+
+    test('with more players left, the finisher takes a place and play goes on without them', () {
+      final last = tokenAt(PlayerColor.red, 51, id: 'r3');
+      final state = fourPlayers(red: [...homeTokens(PlayerColor.red, 3), last]);
+      applyMove(state, rollFor(state, 6, last, 57)); // a 6 AND a finish: 2 bonus rolls
+
+      completeTurn(state);
+
+      expect(state.finishOrder, [PlayerColor.red]);
+      expect(state.phase, GamePhase.rolling);
+      expect(state.currentPlayer.color, PlayerColor.green, reason: 'no bonus rolls once done');
+      expect(state.bonusRollsRemaining, 0);
+    });
+
+    test('the game ends when only one player is left, first finisher on top', () {
+      final last = tokenAt(PlayerColor.yellow, 56, id: 'y3');
+      final state = fourPlayers(
+        red: homeTokens(PlayerColor.red, 4),
+        yellow: [...homeTokens(PlayerColor.yellow, 3), last],
+        blue: homeTokens(PlayerColor.blue, 4),
+      )
+        ..finishOrder.addAll([PlayerColor.blue, PlayerColor.red])
+        ..currentPlayerIndex = 2;
+      applyMove(state, rollFor(state, 1, last, 57));
+
+      completeTurn(state);
+
+      expect(state.phase, GamePhase.gameOver);
+      expect(state.finishOrder, [PlayerColor.blue, PlayerColor.red, PlayerColor.yellow]);
+      expect(state.standings.last, PlayerColor.green);
     });
 
     test('advances to the next player when no bonus roll is owed', () {
@@ -312,6 +365,15 @@ void main() {
       advanceTurn(state);
 
       expect(state.currentPlayerIndex, 0);
+    });
+
+    test('skips players who have already finished', () {
+      final state = fourPlayers()..finishOrder.addAll([PlayerColor.green, PlayerColor.yellow]);
+
+      advanceTurn(state);
+      expect(state.currentPlayer.color, PlayerColor.blue);
+      advanceTurn(state);
+      expect(state.currentPlayer.color, PlayerColor.red);
     });
 
     test('resets dice, legal moves, bonus rolls, and phase', () {

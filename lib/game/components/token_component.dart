@@ -48,6 +48,11 @@ class TokenComponent extends PositionComponent with HasGameReference<LudiGame> {
 
   bool get isAnimating => _hop != null;
 
+  /// Draw order while in the air — above every token on the ground (which
+  /// LudiGame layers by screen depth, 100 + y) and the capture burst, so a
+  /// hop or a knock-home never passes *under* a token it flies over.
+  static const int airbornePriority = 1000;
+
   /// The pawn's visual middle, for hit-testing taps.
   Vector2 get bodyCenter => position - Vector2(0, 10 * scale.y);
 
@@ -62,6 +67,7 @@ class TokenComponent extends PositionComponent with HasGameReference<LudiGame> {
     void Function()? onLand,
   }) {
     _hopDone?.complete();
+    priority = airbornePriority;
     _hop = HopPath([position.clone(), ...points], stepDuration: step, height: height);
     _hopDone = Completer<void>();
     _onLand = onLand;

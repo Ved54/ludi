@@ -12,7 +12,9 @@ class GameState {
     this.phase = GamePhase.rolling,
     this.bonusRollsRemaining = 0,
     this.lastRoll = 0,
-  }) : legalMoves = legalMoves ?? [];
+    List<PlayerColor>? finishOrder,
+  }) : legalMoves = legalMoves ?? [],
+       finishOrder = finishOrder ?? [];
 
   final List<Player> players;
   int currentPlayerIndex;
@@ -40,4 +42,17 @@ class GameState {
   /// turn_manager.dart), and they stack: a single move can trigger more
   /// than one at once.
   int bonusRollsRemaining;
+
+  /// Players who have brought all four tokens home, in the order they did
+  /// it — the first is the winner. The rest play on for the places
+  /// without them; the game is over once a single player is left.
+  final List<PlayerColor> finishOrder;
+
+  /// Final places, first to last: everyone who finished, in order, then
+  /// whoever is still playing.
+  List<PlayerColor> get standings => [
+    ...finishOrder,
+    for (final p in players)
+      if (!finishOrder.contains(p.color)) p.color,
+  ];
 }

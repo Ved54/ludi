@@ -47,6 +47,10 @@ class DiceComponent extends PositionComponent
 
   bool get _rolling => _tumble >= 0;
 
+  /// The face on show once the die has come to rest, or null while it is
+  /// blank (before this player's first roll) or still tumbling.
+  int? get face => _hasRolled && !_rolling ? _face : null;
+
   /// Throws the die: spins, hops, and flickers through random faces.
   /// Completes when it comes to rest; call [land] with the real value.
   Future<void> tumble() {
@@ -83,6 +87,19 @@ class DiceComponent extends PositionComponent
       ),
     );
     return arrived.future;
+  }
+
+  /// Whether the die is on its way to another pod.
+  bool get isTraveling => children.whereType<MoveToEffect>().isNotEmpty;
+
+  /// A quick side-to-side "no" — the roll was wasted.
+  void shakeNo() {
+    add(
+      MoveByEffect(
+        Vector2(4, 0),
+        EffectController(duration: 0.05, reverseDuration: 0.05, repeatCount: 3),
+      ),
+    );
   }
 
   @override
