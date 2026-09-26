@@ -43,3 +43,9 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Design canvas build output (seeded from design/canvas/*.dc.html sources —
+# regenerate locally rather than committing; the source .dc.html + canvas.json
+# are what's tracked).
+design/canvas/*.html
+!design/canvas/*.dc.html

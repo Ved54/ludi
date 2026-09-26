@@ -1,10 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ludi/rules_engine/capture_logic.dart';
-import 'package:ludi/rules_engine/models/game_state.dart';
 import 'package:ludi/rules_engine/models/player.dart';
 import 'package:ludi/rules_engine/models/token.dart';
 
-GameState buildState({required List<Player> players}) => GameState(players: players);
+import '../helpers/fixtures.dart';
 
 void main() {
   group('toSharedSquare', () {
@@ -19,108 +18,140 @@ void main() {
       expect(toSharedSquare(PlayerColor.blue, 13), 51);
       expect(toSharedSquare(PlayerColor.blue, 14), 0); // wraps past 51
     });
+
+    test("a color's last shared square is the one just before its start", () {
+      // Distance 51 is the final shared square; square start-1 is never
+      // visited by that color (it turns into its home column instead).
+      expect(toSharedSquare(PlayerColor.red, 51), 50);
+      expect(toSharedSquare(PlayerColor.green, 51), 11);
+    });
+
+    test('rejects distances off the shared track', () {
+      expect(() => toSharedSquare(PlayerColor.red, 0), throwsA(isA<AssertionError>()));
+      expect(() => toSharedSquare(PlayerColor.red, 52), throwsA(isA<AssertionError>()));
+    });
+  });
+
+  group('isOnSharedTrack', () {
+    test('is exactly distances 1-51', () {
+      expect(isOnSharedTrack(0), isFalse);
+      expect(isOnSharedTrack(1), isTrue);
+      expect(isOnSharedTrack(51), isTrue);
+      expect(isOnSharedTrack(52), isFalse);
+    });
   });
 
   group('isSafeSquare', () {
     test('start squares are safe', () {
-      expect(isSafeSquare(0), isTrue);
-      expect(isSafeSquare(13), isTrue);
-      expect(isSafeSquare(26), isTrue);
-      expect(isSafeSquare(39), isTrue);
+      for (final square in [0, 13, 26, 39]) {
+        expect(isSafeSquare(square), isTrue, reason: 'square $square');
+      }
     });
 
-    test('non-start squares are not safe', () {
-      expect(isSafeSquare(1), isFalse);
-      expect(isSafeSquare(50), isFalse);
+    test('star squares (8 past each start) are also safe', () {
+      for (final square in [8, 21, 34, 47]) {
+        expect(isSafeSquare(square), isTrue, reason: 'square $square');
+      }
+    });
+
+    test('exactly 8 squares are safe', () {
+      final safe = [for (var s = 0; s < trackLength; s++) if (isSafeSquare(s)) s];
+      expect(safe, [0, 8, 13, 21, 26, 34, 39, 47]);
     });
   });
 
   group('checkCapture', () {
     test('returns opponent token occupying destSquare', () {
-      final redToken = Token(id: 'r1', color: PlayerColor.red, distance: 0);
-      final greenToken = Token(
-        id: 'g1',
-        color: PlayerColor.green,
-        distance: 5,
-        state: TokenState.active,
-      ); // shared square = 13 + 5 - 1 = 17
-
-      final state = buildState(players: [
-        Player(color: PlayerColor.red, startSquare: 0, tokens: [redToken]),
-        Player(color: PlayerColor.green, startSquare: 13, tokens: [greenToken]),
+      final greenToken = tokenAt(PlayerColor.green, 5); // square 17
+      final state = stateWith([
+        playerWith(PlayerColor.red, []),
+        playerWith(PlayerColor.green, [greenToken]),
       ]);
 
-      final captured = checkCapture(17, PlayerColor.red, state);
-      expect(captured, greenToken);
+      expect(checkCapture(17, PlayerColor.red, state), greenToken);
     });
 
     test('returns null when destSquare is empty', () {
-      final state = buildState(players: [
-        Player(color: PlayerColor.red, startSquare: 0, tokens: []),
-        Player(color: PlayerColor.green, startSquare: 13, tokens: []),
+      final state = stateWith([
+        playerWith(PlayerColor.red, []),
+        playerWith(PlayerColor.green, []),
       ]);
 
       expect(checkCapture(17, PlayerColor.red, state), isNull);
     });
 
-    test('returns null on a safe square even if an opponent sits there', () {
-      final greenToken = Token(
-        id: 'g1',
-        color: PlayerColor.green,
-        distance: 1,
-        state: TokenState.active,
-      ); // shared square = 13, a start square = safe
-
-      final state = buildState(players: [
-        Player(color: PlayerColor.red, startSquare: 0, tokens: []),
-        Player(color: PlayerColor.green, startSquare: 13, tokens: [greenToken]),
+    test('returns null on a start square even if an opponent sits there', () {
+      final greenToken = tokenAt(PlayerColor.green, 1); // square 13
+      final state = stateWith([
+        playerWith(PlayerColor.red, []),
+        playerWith(PlayerColor.green, [greenToken]),
       ]);
 
       expect(checkCapture(13, PlayerColor.red, state), isNull);
     });
 
-    test('ignores tokens of the moving color (no self-capture)', () {
-      final redToken2 = Token(
-        id: 'r2',
-        color: PlayerColor.red,
-        distance: 5,
-        state: TokenState.active,
-      ); // shared square = 0 + 5 - 1 = 4
-
-      final state = buildState(players: [
-        Player(color: PlayerColor.red, startSquare: 0, tokens: [redToken2]),
+    test('returns null on a star square even if an opponent sits there', () {
+      final greenToken = tokenAt(PlayerColor.green, 9); // square 21, a star
+      final state = stateWith([
+        playerWith(PlayerColor.red, []),
+        playerWith(PlayerColor.green, [greenToken]),
       ]);
+
+      expect(checkCapture(21, PlayerColor.red, state), isNull);
+    });
+
+    test('ignores tokens of the moving color (no self-capture)', () {
+      final redToken = tokenAt(PlayerColor.red, 5); // square 4
+      final state = stateWith([playerWith(PlayerColor.red, [redToken])]);
 
       expect(checkCapture(4, PlayerColor.red, state), isNull);
     });
 
     test('ignores tokens still in the yard', () {
-      final greenToken = Token(id: 'g1', color: PlayerColor.green, distance: 0);
-      // yard token, state defaults to TokenState.yard — not on the track at all.
-
-      final state = buildState(players: [
-        Player(color: PlayerColor.red, startSquare: 0, tokens: []),
-        Player(color: PlayerColor.green, startSquare: 13, tokens: [greenToken]),
+      final greenToken = Token(id: 'g1', color: PlayerColor.green);
+      final state = stateWith([
+        playerWith(PlayerColor.red, []),
+        playerWith(PlayerColor.green, [greenToken]),
       ]);
 
-      expect(checkCapture(13, PlayerColor.red, state), isNull);
+      for (var square = 0; square < trackLength; square++) {
+        expect(checkCapture(square, PlayerColor.red, state), isNull);
+      }
     });
 
     test('ignores tokens in the private home stretch', () {
-      final greenToken = Token(
-        id: 'g1',
-        color: PlayerColor.green,
-        distance: 52,
-        state: TokenState.homeStretch,
-      );
-
-      final state = buildState(players: [
-        Player(color: PlayerColor.red, startSquare: 0, tokens: []),
-        Player(color: PlayerColor.green, startSquare: 13, tokens: [greenToken]),
+      final greenToken = tokenAt(PlayerColor.green, 52);
+      final state = stateWith([
+        playerWith(PlayerColor.red, []),
+        playerWith(PlayerColor.green, [greenToken]),
       ]);
 
-      // Even probing the square the home-stretch math would otherwise hit.
-      expect(checkCapture(toSharedSquare(PlayerColor.green, 52), PlayerColor.red, state), isNull);
+      for (var square = 0; square < trackLength; square++) {
+        expect(checkCapture(square, PlayerColor.red, state), isNull);
+      }
+    });
+  });
+
+  group('capturableTokensAt', () {
+    test('returns every token of a stacked opponent pair', () {
+      final g1 = tokenAt(PlayerColor.green, 5, id: 'g1'); // square 17
+      final g2 = tokenAt(PlayerColor.green, 5, id: 'g2');
+      final state = stateWith([
+        playerWith(PlayerColor.red, []),
+        playerWith(PlayerColor.green, [g1, g2]),
+      ]);
+
+      expect(capturableTokensAt(17, PlayerColor.red, state), [g1, g2]);
+    });
+
+    test('is empty on a safe square', () {
+      final g1 = tokenAt(PlayerColor.green, 9, id: 'g1'); // square 21, star
+      final state = stateWith([
+        playerWith(PlayerColor.red, []),
+        playerWith(PlayerColor.green, [g1]),
+      ]);
+
+      expect(capturableTokensAt(21, PlayerColor.red, state), isEmpty);
     });
   });
 }
