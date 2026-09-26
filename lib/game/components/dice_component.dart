@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 import 'dart:ui';
 
@@ -6,165 +7,194 @@ import 'package:flame/effects.dart';
 import 'package:flame/events.dart';
 import 'package:flutter/animation.dart' show Curves;
 
-import '../../rules_engine/models/game_state.dart' show GamePhase;
-import '../../state/game_controller.dart';
+import '../ludi_game.dart';
 import '../ludi_theme.dart';
 
-/// The flat isometric cube from the A1 style guide — white body, dark
-/// pips, two shaded faces faking depth, one soft contact shadow. Tap to
-/// roll (only responds during GamePhase.rolling); the real result comes
-/// back instantly from GameController.rollDice(), but the display holds
-/// off revealing it — flickering through random faces for ~600ms with a
-/// tumble effect — before locking onto the true value.
+/// The die from the A1 style guide — off-white body, dark pips, a shaded
+/// side faking depth, one soft contact shadow. It lives in the active
+/// player's HUD pod and travels to the next pod when the turn passes.
 ///
-/// The rolled number is read from GameState.lastRoll (a display-only value
-/// that survives the turn auto-skipping), not lastDiceValue — so a non-6
-/// roll in a fresh game still shows what came up before the turn passes.
-class DiceComponent extends PositionComponent with TapCallbacks {
-  DiceComponent({required this.controller})
-      : super(size: Vector2(_faceSize + _depth, _faceSize + _depth + 12));
+/// Tapping asks LudiGame for a roll. The die only *tumbles* here: the real
+/// value comes from GameController once the tumble ends, and [land] shows
+/// it — so the number never appears before the die has stopped.
+class DiceComponent extends PositionComponent
+    with TapCallbacks, HasGameReference<LudiGame> {
+  DiceComponent() : super(size: Vector2.all(_side + 8), anchor: Anchor.center);
 
-  final GameController controller;
-
-  static const double _faceSize = 36;
-  static const double _depth = 10;
-  static const Duration _rollDuration = Duration(milliseconds: 600);
-  static const Duration _flickerInterval = Duration(milliseconds: 90);
-
-  /// How long the result stays at full brightness after the tumble ends,
-  /// before dimming to invite the next tap — long enough to read it even
-  /// when the turn skipped straight past.
-  static const double _resultHoldSeconds = 1.2;
+  static const double _side = 42;
+  static const double _depth = 5;
 
   final Random _random = Random();
-  bool _isRolling = false;
-  int _displayPips = 1;
-  double _flickerElapsed = 0;
-  double _resultHold = 0;
+  int _face = 6;
+  bool _hasRolled = false;
 
-  static const Map<int, List<List<double>>> _pipLayout = {
-    1: [[0.5, 0.5]],
-    2: [[0.28, 0.28], [0.72, 0.72]],
-    3: [[0.28, 0.28], [0.5, 0.5], [0.72, 0.72]],
-    4: [[0.28, 0.28], [0.72, 0.28], [0.28, 0.72], [0.72, 0.72]],
-    5: [[0.28, 0.28], [0.72, 0.28], [0.5, 0.5], [0.28, 0.72], [0.72, 0.72]],
-    6: [[0.28, 0.22], [0.72, 0.22], [0.28, 0.5], [0.72, 0.5], [0.28, 0.78], [0.72, 0.78]],
+  double _tumble = -1; // seconds into the tumble, -1 when still
+  Completer<void>? _tumbled;
+  double _flicker = 0;
+  double _spinDirection = 1;
+  double _lift = 0;
+  double _pop = 0;
+  double _time = 0;
+
+  static const Map<int, List<(double, double)>> _pips = {
+    1: [(0.5, 0.5)],
+    2: [(0.27, 0.27), (0.73, 0.73)],
+    3: [(0.27, 0.27), (0.5, 0.5), (0.73, 0.73)],
+    4: [(0.27, 0.27), (0.73, 0.27), (0.27, 0.73), (0.73, 0.73)],
+    5: [(0.27, 0.27), (0.73, 0.27), (0.5, 0.5), (0.27, 0.73), (0.73, 0.73)],
+    6: [(0.27, 0.24), (0.73, 0.24), (0.27, 0.5), (0.73, 0.5), (0.27, 0.76), (0.73, 0.76)],
   };
+
+  bool get _rolling => _tumble >= 0;
+
+  /// Throws the die: spins, hops, and flickers through random faces.
+  /// Completes when it comes to rest; call [land] with the real value.
+  Future<void> tumble() {
+    _tumble = 0;
+    _flicker = 0;
+    _spinDirection = _random.nextBool() ? 1 : -1;
+    _tumbled = Completer<void>();
+    return _tumbled!.future;
+  }
+
+  /// Shows the rolled [value] with a little pop.
+  void land(int value) {
+    _face = value;
+    _hasRolled = true;
+    _pop = 1;
+  }
+
+  /// Slides over to [target] (a HUD pod's dice slot), arriving blank —
+  /// the last player's number shouldn't read as the next player's roll.
+  Future<void> travelTo(Vector2 target) {
+    _hasRolled = false;
+    final arrived = Completer<void>();
+    add(
+      MoveToEffect(
+        target,
+        EffectController(duration: LudiMotion.diceTravel, curve: Curves.easeInOutCubic),
+        onComplete: arrived.complete,
+      ),
+    );
+    add(
+      RotateEffect.by(
+        2 * pi * (_random.nextBool() ? 1 : -1),
+        EffectController(duration: LudiMotion.diceTravel, curve: Curves.easeInOutCubic),
+      ),
+    );
+    return arrived.future;
+  }
+
+  @override
+  void onTapDown(TapDownEvent event) => game.requestRoll();
 
   @override
   void update(double dt) {
     super.update(dt);
-    if (_isRolling) {
-      _flickerElapsed += dt;
-      if (_flickerElapsed >= _flickerInterval.inMilliseconds / 1000) {
-        _flickerElapsed = 0;
-        _displayPips = 1 + _random.nextInt(6);
+    _time += dt;
+    _pop = max(0, _pop - dt * 3.5);
+
+    if (_rolling) {
+      _tumble += dt;
+      final t = min(1.0, _tumble / LudiMotion.diceTumble);
+      final settle = 1 - pow(1 - t, 3).toDouble(); // ease-out
+      angle = _spinDirection * 3.4 * pi * (1 - settle);
+      _lift = sin(pi * min(1, t * 1.15)) * 16;
+      _flicker += dt;
+      // Faces change fast at first, slowing as the die settles.
+      if (_flicker > 0.045 + 0.12 * t) {
+        _flicker = 0;
+        _face = 1 + (_face + _random.nextInt(5)) % 6;
       }
-    } else {
-      if (_resultHold > 0) _resultHold -= dt;
-      if (controller.state.lastRoll > 0) {
-        _displayPips = controller.state.lastRoll;
+      if (t >= 1) {
+        _tumble = -1;
+        angle = 0;
+        _lift = 0;
+        final done = _tumbled;
+        _tumbled = null;
+        done?.complete();
       }
+    } else if (game.canRoll && children.isEmpty) {
+      // Waiting for a tap: a small wiggle every couple of seconds.
+      final cycle = _time % 2.2;
+      angle = cycle < 0.4 ? sin(cycle / 0.4 * 3 * pi) * 0.12 : 0;
     }
-  }
 
-  @override
-  void onTapDown(TapDownEvent event) {
-    if (_isRolling || controller.state.phase != GamePhase.rolling) return;
-    _isRolling = true;
-    controller.rollDice();
-
-    final seconds = _rollDuration.inMilliseconds / 1000;
-    add(
-      RotateEffect.by(
-        2 * pi,
-        EffectController(duration: seconds, curve: Curves.easeOut),
-        onComplete: () {
-          _isRolling = false;
-          _displayPips = controller.state.lastRoll;
-          _resultHold = _resultHoldSeconds;
-        },
-      ),
-    );
-    add(
-      ScaleEffect.by(
-        Vector2.all(1.18),
-        EffectController(
-          duration: seconds / 4,
-          reverseDuration: seconds / 4,
-          repeatCount: 2,
-          curve: Curves.easeInOut,
-        ),
-      ),
-    );
+    final breathe = game.canRoll ? 0.035 * sin(_time * 4) : 0;
+    scale.setAll(1 + breathe + 0.22 * sin(pi * _pop) * _pop);
   }
 
   @override
   void render(Canvas canvas) {
-    final neverRolled = controller.state.lastRoll == 0;
-    // Dimmed while waiting for a tap — but not right after a roll (hold
-    // the result bright long enough to read), and not mid-tumble.
-    final prompting = !_isRolling &&
-        _resultHold <= 0 &&
-        controller.state.phase == GamePhase.rolling;
-    final dim = neverRolled || prompting;
-    final opacity = dim ? 0.55 : 1.0;
+    final center = Offset(size.x / 2, size.y / 2);
+    final accent = playerPalette[game.activeColor]!;
 
+    // Contact shadow stays on the table while the die is in the air.
+    final shrink = 1 - _lift / 40;
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(-angle); // keep the shadow flat under the spin
     canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(_faceSize / 2, _faceSize + _depth + 6),
-        width: _faceSize * 0.8,
-        height: 6,
-      ),
-      Paint()..color = LudiNeutral.textPrimary.withValues(alpha: 0.12 * opacity),
+      Rect.fromCenter(center: const Offset(0, _side / 2 + 3), width: _side * 0.9 * shrink, height: 7 * shrink),
+      Paint()..color = LudiNeutral.textPrimary.withValues(alpha: 0.18 * shrink),
     );
+    canvas.restore();
 
-    final topFace = Path()
-      ..moveTo(0, _depth)
-      ..lineTo(_depth, 0)
-      ..lineTo(_depth + _faceSize, 0)
-      ..lineTo(_faceSize, _depth)
-      ..close();
-    canvas.drawPath(
-      topFace,
-      Paint()..color = const Color(0xFFF3EFE7).withValues(alpha: opacity),
+    canvas.save();
+    canvas.translate(0, -_lift);
+    final face = RRect.fromRectAndRadius(
+      Rect.fromCenter(center: center, width: _side, height: _side),
+      const Radius.circular(11),
     );
-
-    final sideFace = Path()
-      ..moveTo(_faceSize, _depth)
-      ..lineTo(_faceSize + _depth, 0)
-      ..lineTo(_faceSize + _depth, _faceSize)
-      ..lineTo(_faceSize, _faceSize + _depth)
-      ..close();
-    canvas.drawPath(
-      sideFace,
-      Paint()..color = const Color(0xFFE6E0D4).withValues(alpha: opacity),
-    );
-
-    final frontRect = Rect.fromLTWH(0, _depth, _faceSize, _faceSize);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(frontRect, const Radius.circular(6)),
-      Paint()..color = LudiNeutral.trackSquare.withValues(alpha: opacity),
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(frontRect, const Radius.circular(6)),
-      Paint()
-        ..color = LudiNeutral.gridLine.withValues(alpha: opacity)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1,
-    );
-
-    // Pips show while tumbling and any time a value has ever been rolled —
-    // dimmed with the rest of the cube when waiting for the next tap.
-    if (_isRolling || !neverRolled) {
-      final pipPaint = Paint()..color = LudiNeutral.textPrimary.withValues(alpha: opacity);
-      for (final p in _pipLayout[_displayPips]!) {
-        canvas.drawCircle(
-          Offset(p[0] * _faceSize, _depth + p[1] * _faceSize),
-          2.6,
-          pipPaint,
-        );
-      }
+    if (game.canRoll) {
+      final pulse = 0.5 + 0.5 * sin(_time * 4);
+      canvas.drawRRect(
+        face.inflate(3 + 2 * pulse),
+        Paint()
+          ..color = accent.base.withValues(alpha: 0.35 + 0.35 * pulse)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3,
+      );
     }
+    canvas.drawRRect(face.shift(const Offset(0, _depth)), Paint()..color = LudiNeutral.diceSide);
+    canvas.drawRRect(face, Paint()..color = LudiNeutral.surface);
+    canvas.drawRRect(
+      face,
+      Paint()
+        ..color = LudiNeutral.gridLine
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2,
+    );
+
+    if (_hasRolled || _rolling) {
+      final pip = Paint()
+        ..color = _face == 6 && !_rolling ? accent.deep : LudiNeutral.textPrimary;
+      final origin = face.outerRect.topLeft;
+      for (final (x, y) in _pips[_face]!) {
+        canvas.drawCircle(origin + Offset(x * _side, y * _side), 4, pip);
+      }
+    } else {
+      _paintRollHint(canvas, center, accent.deep);
+    }
+    canvas.restore();
+  }
+
+  /// Before the first roll: a circular-arrow glyph instead of pips.
+  void _paintRollHint(Canvas canvas, Offset center, Color color) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round;
+    const r = 10.0;
+    canvas.drawArc(Rect.fromCircle(center: center, radius: r), -pi * 0.35, pi * 1.6, false, paint);
+    final tip = center + Offset(cos(-pi * 0.35) * r, sin(-pi * 0.35) * r);
+    canvas.drawPath(
+      Path()
+        ..moveTo(tip.dx - 6, tip.dy - 3)
+        ..lineTo(tip.dx + 1, tip.dy + 1)
+        ..lineTo(tip.dx - 1, tip.dy - 7),
+      paint..strokeJoin = StrokeJoin.round,
+    );
   }
 }

@@ -21,6 +21,17 @@ Ludi is a bidirectional Ludo variant. It plays by classic Ludo rules with one tw
 - If the backward distance doesn't land exactly on a capturable opponent, backward is simply not offered as an option for that token on that roll — only forward is legal.
 - Backward movement still cannot retreat a token past its entry point (distance floor = 0; can't re-enter the yard).
 
+**Rule details (as implemented in `lib/rules_engine/`):**
+
+- **Board:** 52-square shared loop. Start squares 0/13/26/39 (red/green/yellow/blue) and star squares 8/21/34/47 are the 8 safe squares — no capture happens on them, in either direction.
+- **Leaving the yard:** only on a 6, onto the color's own start square (distance 1); the whole roll is used.
+- **Home:** distance 1–51 is the shared track, 52–56 the private home column, 57 the finish. The finish needs an exact roll — overshooting isn't a legal move.
+- **Capture:** landing on a non-safe square sends every opponent token there back to its yard (a stacked pair goes home together), so no non-safe square is ever shared by two colors.
+- **Backward:** only as a kill, and only onto the shared track — a token in its home column may strike back out onto the track, but never steps backward within the column.
+- **Bonus rolls:** rolling a 6, capturing, and finishing a token each earn one extra roll, and they stack (a 6 that captures earns two). A 6 with no legal move still earns its re-roll. No cap on consecutive 6s.
+- **No legal move:** the roll is wasted; the turn passes unless a bonus roll is still owed.
+- **Winning:** the first player to finish all 4 tokens wins and the game ends.
+
 **Team:** two developers — Vedant (code & logic, owns the repo/folder structure) and Aditi (creative & rendering).
 **Target:** Google Play. **MVP monetization:** none — fully free for now (see Section 8).
 
@@ -57,7 +68,7 @@ enum PlayerColor { red, green, yellow, blue }
 class Token {
   final String id;
   final PlayerColor color;
-  int distance;        // 0 = yard. 1-51 = shared track. 52+ = home stretch.
+  int distance;        // 0 = yard. 1-51 = shared track. 52-56 = home column. 57 = finished.
   TokenState state;
 }
 
@@ -84,7 +95,7 @@ class Move {
 }
 ```
 
-**Board layout:** single shared 52-square track (indices 0–51), each player's `startSquare` is an offset into it, plus a private 6-square home stretch per color (indices 52–57 relative to that player).
+**Board layout:** single shared 52-square track (indices 0–51), each player's `startSquare` is an offset into it, plus a private 6-step home stretch per color (indices 52–57 relative to that player: 52–56 are the 5 home-column squares, 57 is the finish).
 
 ---
 
@@ -106,7 +117,7 @@ List<Move> getLegalMoves(Token token, int diceValue, GameState state) {
   // No capturable opponent at that square -> backward is not offered at all.
   if (token.state != TokenState.yard) {
     final backwardDist = token.distance - diceValue;
-    if (backwardDist >= 1) { // can't retreat into yard
+    if (isOnSharedTrack(backwardDist)) { // 1-51: not the yard, not the home column
       final destSquare = toSharedSquare(token.color, backwardDist);
       final wouldCapture = checkCapture(destSquare, token.color, state);
       if (wouldCapture != null) {
@@ -172,6 +183,14 @@ class GameController extends ChangeNotifier {
   List<Move> get currentLegalMoves;
   void rollDice();
   void selectMove(Move move);
+
+  // Animation handshake: built with holdMovesForAnimation: true, a selected
+  // move stops in GamePhase.animating (board already updated, turn not yet
+  // resolved) until the Flame layer calls completeMove() after its hop /
+  // capture animations. Off by default — selectMove then resolves at once.
+  GameController({GameState? initialState, Random? random,
+                  bool holdMovesForAnimation = false});
+  void completeMove();
 
   // Callbacks Aditi's Flame layer listens to, to trigger animation + sound:
   // - onMoveAnimated(Move move)
@@ -279,6 +298,8 @@ Vedant creates the repo and pushes the full folder skeleton with contract stubs 
 | A5 | Audio | Source clips, `SoundManager`, mute toggle | `lib/audio/` | none — build standalone, wire in later |
 | A6 | UI screens | Home, game screen, HUD, game-over | `lib/ui/` | V6 full controller — **mockable for layout**, real for final wiring |
 | A7 | Branding | App icon, Play Store graphics, splash screen | `assets/`, store listing | none |
+
+**Status:** A1–A3 by Aditi. At the project owner's request, Vedant's instance then built out A4 (hop / capture / home animations in `lib/game/effects/`, driven by `LudiGame`), A6 (home screen with player count + rules, game screen, HUD pods, winner card) and reworked A2/A3 to match (tiled board, token stacking, dice handoff). Nunito is bundled in `assets/fonts/`. **Still open:** A5 audio (no sound assets yet) and A7 branding (app icon; the Android splash only got the palette background).
 
 ---
 

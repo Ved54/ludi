@@ -105,8 +105,8 @@ Master spec flags this as the core mechanic worth a distinct visual signature. D
 
 ## 9. Open items for later A-tasks
 
-- [ ] A2: decide safe-square star color rule (see §2 note)
-- [ ] A2: finalize token stacking/offset behavior for 2+ tokens on one square
-- [ ] A4: decide selectable-token idle treatment
-- [ ] A4: revisit §7 (backward-move flair) once forward animation exists
-- [ ] A7: app icon + splash screen, palette-locked
+- [x] A2: safe-square star color — neutral `#3A342C` at ~28% everywhere (reads on white cells; colored cells never carry stars).
+- [x] A2: stacking — tokens sharing a square fan out and shrink (2: side by side at 80%, 3: triangle at 72%, 4: 2x2 at 66%), easing into place.
+- [x] A4: selectable tokens gently bob with a looping expanding ring in their Deep shade; a token with two options gets a solid ring when picked and its route is dotted in.
+- [x] A4: §7 backward flair — no separate move animation (same hops, reversed); instead every capturing option is marked with a rotating crosshair, and a backward kill is called out as "Backstrike!".
+- [ ] A7: app icon + splash screen, palette-locked (Android splash now uses the board background; icon still Flutter's default)

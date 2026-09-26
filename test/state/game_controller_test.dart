@@ -5,115 +5,112 @@ import 'package:ludi/rules_engine/models/player.dart';
 import 'package:ludi/rules_engine/models/token.dart';
 import 'package:ludi/state/game_controller.dart';
 
-GameState buildState({
-  required List<Player> players,
-  int currentPlayerIndex = 0,
-  GamePhase phase = GamePhase.rolling,
-}) => GameState(
-  players: players,
-  currentPlayerIndex: currentPlayerIndex,
-  phase: phase,
+import '../helpers/fixtures.dart';
+
+/// Controller over red (index 0) vs green (index 1) with scripted [rolls].
+GameController controllerFor(
+  List<Token> red,
+  List<Token> green, {
+  required List<int> rolls,
+}) => GameController(
+  initialState: stateWith([
+    playerWith(PlayerColor.red, red),
+    playerWith(PlayerColor.green, green),
+  ]),
+  random: ScriptedRandom(rolls),
 );
+
+Move moveTo(GameController controller, Token token, int newDistance) =>
+    controller.currentLegalMoves.singleWhere(
+      (m) => m.token == token && m.newDistance == newDistance,
+    );
 
 void main() {
   group('newGame', () {
     test('builds 4 players with 4 yard tokens each, red up first', () {
       final state = newGame();
 
-      expect(state.players.length, 4);
+      expect(state.players.map((p) => p.color), PlayerColor.values);
       expect(state.players.every((p) => p.tokens.length == 4), isTrue);
       expect(
-        state.players
-            .expand((p) => p.tokens)
-            .every((t) => t.state == TokenState.yard),
+        state.players.expand((p) => p.tokens).every((t) => t.state == TokenState.yard),
         isTrue,
       );
-      expect(state.currentPlayerIndex, 0);
-      expect(state.players[state.currentPlayerIndex].color, PlayerColor.red);
+      expect(state.currentPlayer.color, PlayerColor.red);
       expect(state.phase, GamePhase.rolling);
+    });
+
+    test('gives every token a unique id', () {
+      final ids = newGame().players.expand((p) => p.tokens).map((t) => t.id);
+      expect(ids.toSet().length, 16);
+    });
+
+    test('seats only the chosen colors, in clockwise board order', () {
+      final state = newGame(colors: [PlayerColor.yellow, PlayerColor.red]);
+
+      expect(state.players.map((p) => p.color), [PlayerColor.red, PlayerColor.yellow]);
+      expect(state.currentPlayer.color, PlayerColor.red);
+    });
+
+    test('rejects fewer than 2 or duplicate colors', () {
+      expect(() => newGame(colors: [PlayerColor.red]), throwsArgumentError);
+      expect(
+        () => newGame(colors: [PlayerColor.red, PlayerColor.red]),
+        throwsArgumentError,
+      );
     });
   });
 
   group('GameController.rollDice', () {
     test('rolls, updates state, and notifies listeners', () {
-      // An active (already-out) token has a legal move for any roll 1-6,
-      // so lastDiceValue is guaranteed to stay set regardless of the real
-      // roll — a fresh, all-yard GameController() would instead auto-skip
-      // (and reset lastDiceValue to 0) on the 5/6 of rolls that aren't a
-      // 6, since a yard token can only leave the yard on a 6.
-      final token = Token(
-        id: 'r1',
-        color: PlayerColor.red,
-        distance: 5,
-        state: TokenState.active,
-      );
-      final state = buildState(
-        players: [
-          Player(color: PlayerColor.red, startSquare: 0, tokens: [token]),
-        ],
-      );
-      final controller = GameController(initialState: state);
+      final controller = controllerFor([tokenAt(PlayerColor.red, 5)], [], rolls: [4]);
       var notified = 0;
       controller.addListener(() => notified++);
 
       controller.rollDice();
 
-      expect(controller.state.lastDiceValue, inInclusiveRange(1, 6));
+      expect(controller.state.lastDiceValue, 4);
+      expect(controller.state.phase, GamePhase.selecting);
       expect(notified, 1);
+    });
+
+    test('is ignored while a move is pending (no re-rolling for a better number)', () {
+      final controller = controllerFor([tokenAt(PlayerColor.red, 5)], [], rolls: [2, 6]);
+      controller.rollDice();
+      var notified = 0;
+      controller.addListener(() => notified++);
+
+      controller.rollDice();
+
+      expect(controller.state.lastDiceValue, 2);
+      expect(notified, 0);
+    });
+
+    test('is ignored once the game is over', () {
+      final controller = controllerFor([tokenAt(PlayerColor.red, 5)], [], rolls: [2]);
+      controller.state.phase = GamePhase.gameOver;
+
+      controller.rollDice();
+
+      expect(controller.state.lastRoll, 0);
     });
   });
 
   group('GameController.selectMove', () {
-    test('rolling a 6 keeps the turn with the same player (bonus roll)', () {
-      final token = Token(
-        id: 'r1',
-        color: PlayerColor.red,
-        distance: 10,
-        state: TokenState.active,
-      );
-      final state = buildState(
-        players: [
-          Player(color: PlayerColor.red, startSquare: 0, tokens: [token]),
-          Player(
-            color: PlayerColor.green,
-            startSquare: 13,
-            tokens: [Token(id: 'g1', color: PlayerColor.green)],
-          ),
-        ],
-      );
-      state.lastDiceValue = 6;
-      final controller = GameController(initialState: state);
-
-      controller.selectMove(Move(token: token, newDistance: 16, isBackward: false));
-
-      expect(controller.state.currentPlayerIndex, 0); // still red
-      expect(controller.state.phase, GamePhase.rolling); // ready to roll again
-    });
-
     test('applies the move, fires onMoveAnimated, and notifies', () {
-      final token = Token(
-        id: 'r1',
-        color: PlayerColor.red,
-        distance: 10,
-        state: TokenState.active,
+      final token = tokenAt(PlayerColor.red, 10);
+      final controller = controllerFor(
+        [token],
+        [Token(id: 'g1', color: PlayerColor.green)],
+        rolls: [4],
       );
-      final state = buildState(
-        players: [
-          Player(color: PlayerColor.red, startSquare: 0, tokens: [token]),
-          Player(
-            color: PlayerColor.green,
-            startSquare: 13,
-            tokens: [Token(id: 'g1', color: PlayerColor.green)],
-          ),
-        ],
-      );
-      final controller = GameController(initialState: state);
       Move? animated;
       controller.onMoveAnimated = (m) => animated = m;
+      controller.rollDice();
       var notified = 0;
       controller.addListener(() => notified++);
 
-      final move = Move(token: token, newDistance: 14, isBackward: false);
+      final move = moveTo(controller, token, 14);
       controller.selectMove(move);
 
       expect(token.distance, 14);
@@ -122,80 +119,133 @@ void main() {
       expect(controller.state.currentPlayerIndex, 1); // turn advanced
     });
 
-    test('fires onCapture when the move captures an opponent', () {
-      final redToken = Token(
-        id: 'r1',
-        color: PlayerColor.red,
-        distance: 10,
-        state: TokenState.active,
-      );
-      final greenToken = Token(
-        id: 'g1',
-        color: PlayerColor.green,
-        distance: 4,
-        state: TokenState.active,
-      );
-      final state = buildState(
-        players: [
-          Player(color: PlayerColor.red, startSquare: 0, tokens: [redToken]),
-          Player(
-            color: PlayerColor.green,
-            startSquare: 13,
-            tokens: [greenToken],
-          ),
-        ],
-      );
-      final controller = GameController(initialState: state);
-      Token? captured;
-      controller.onCapture = (t) => captured = t;
+    test('rolling a 6 keeps the turn with the same player (bonus roll)', () {
+      final token = tokenAt(PlayerColor.red, 10);
+      final controller = controllerFor([token], [], rolls: [6]);
+      controller.rollDice();
 
-      final move = Move(
-        token: redToken,
-        newDistance: 17,
-        isBackward: false,
-        capturedToken: greenToken,
-      );
+      controller.selectMove(moveTo(controller, token, 16));
+
+      expect(controller.state.currentPlayerIndex, 0); // still red
+      expect(controller.state.phase, GamePhase.rolling); // ready to roll again
+    });
+
+    test('ignores a double tap — the same move only applies once', () {
+      final token = tokenAt(PlayerColor.red, 10);
+      final controller = controllerFor([token], [tokenAt(PlayerColor.green, 30)], rolls: [4]);
+      controller.rollDice();
+      final move = moveTo(controller, token, 14);
+
+      controller.selectMove(move);
       controller.selectMove(move);
 
-      expect(captured, greenToken);
-      expect(greenToken.state, TokenState.yard);
-      expect(greenToken.distance, 0);
+      expect(token.distance, 14);
+      expect(controller.state.currentPlayerIndex, 1);
+    });
+
+    test('ignores a move that is not currently legal', () {
+      final token = tokenAt(PlayerColor.red, 10);
+      final controller = controllerFor([token], [], rolls: [4]);
+      controller.rollDice();
+      var notified = 0;
+      controller.addListener(() => notified++);
+
+      controller.selectMove(Move(token: token, newDistance: 40, isBackward: false));
+
+      expect(token.distance, 10);
+      expect(controller.state.phase, GamePhase.selecting);
+      expect(notified, 0);
+    });
+
+    test('fires onCapture for every captured opponent token', () {
+      final redToken = tokenAt(PlayerColor.red, 12); // square 11
+      final g1 = tokenAt(PlayerColor.green, 4, id: 'g1'); // square 16
+      final g2 = tokenAt(PlayerColor.green, 4, id: 'g2');
+      final controller = controllerFor([redToken], [g1, g2], rolls: [5]);
+      final captured = <Token>[];
+      controller.onCapture = captured.add;
+      controller.rollDice();
+
+      controller.selectMove(moveTo(controller, redToken, 17));
+
+      expect(captured, [g1, g2]);
+      expect([g1.state, g2.state], [TokenState.yard, TokenState.yard]);
+      expect(controller.state.currentPlayerIndex, 0); // capture bonus roll
     });
 
     test('fires onGameOver with the winner once all their tokens finish', () {
-      final lastToken = Token(
-        id: 'r4',
-        color: PlayerColor.red,
-        distance: 56,
-        state: TokenState.homeStretch,
-      );
-      final finishedTokens = List.generate(
-        3,
-        (i) => Token(
-          id: 'r$i',
-          color: PlayerColor.red,
-          distance: 58,
-          state: TokenState.finished,
-        ),
-      );
-      final state = buildState(
-        players: [
-          Player(
-            color: PlayerColor.red,
-            startSquare: 0,
-            tokens: [...finishedTokens, lastToken],
-          ),
+      final lastToken = tokenAt(PlayerColor.red, 55, id: 'r3');
+      final controller = controllerFor(
+        [
+          for (var i = 0; i < 3; i++) tokenAt(PlayerColor.red, 57, id: 'r$i'),
+          lastToken,
         ],
+        [Token(id: 'g1', color: PlayerColor.green)],
+        rolls: [2],
       );
-      final controller = GameController(initialState: state);
       PlayerColor? winner;
       controller.onGameOver = (c) => winner = c;
+      controller.rollDice();
 
-      final move = Move(token: lastToken, newDistance: 58, isBackward: false);
-      controller.selectMove(move);
+      controller.selectMove(moveTo(controller, lastToken, 57));
 
       expect(winner, PlayerColor.red);
       expect(controller.state.phase, GamePhase.gameOver);
+      expect(controller.currentLegalMoves, isEmpty);
+    });
+  });
+
+  group('GameController with holdMovesForAnimation', () {
+    GameController heldController(Token red, {required List<int> rolls}) =>
+        GameController(
+          initialState: stateWith([
+            playerWith(PlayerColor.red, [red]),
+            playerWith(PlayerColor.green, [tokenAt(PlayerColor.green, 30)]),
+          ]),
+          random: ScriptedRandom(rolls),
+          holdMovesForAnimation: true,
+        );
+
+    test('selectMove applies the move but waits in animating', () {
+      final token = tokenAt(PlayerColor.red, 10);
+      final controller = heldController(token, rolls: [4]);
+      controller.rollDice();
+
+      controller.selectMove(moveTo(controller, token, 14));
+
+      expect(token.distance, 14);
+      expect(controller.state.phase, GamePhase.animating);
+      expect(controller.state.currentPlayerIndex, 0);
+    });
+
+    test('ignores rolls and moves until completeMove', () {
+      final token = tokenAt(PlayerColor.red, 10);
+      final controller = heldController(token, rolls: [4, 2]);
+      controller.rollDice();
+      final move = moveTo(controller, token, 14);
+      controller.selectMove(move);
+
+      controller.rollDice();
+      controller.selectMove(move);
+
+      expect(controller.state.lastDiceValue, 4);
+      expect(token.distance, 14);
+    });
+
+    test('completeMove resolves the turn and notifies', () {
+      final token = tokenAt(PlayerColor.red, 10);
+      final controller = heldController(token, rolls: [4]);
+      controller.rollDice();
+      controller.selectMove(moveTo(controller, token, 14));
+      var notified = 0;
+      controller.addListener(() => notified++);
+
+      controller.completeMove();
+      controller.completeMove(); // second call is a no-op
+
+      expect(controller.state.currentPlayerIndex, 1);
+      expect(controller.state.phase, GamePhase.rolling);
+      expect(notified, 1);
     });
   });
 }
