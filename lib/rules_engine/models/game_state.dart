@@ -17,6 +17,8 @@ class GameState {
   final List<Player> players;
   int currentPlayerIndex;
 
+  Player get currentPlayer => players[currentPlayerIndex];
+
   /// The die value driving the *current pending decision* — zeroed when
   /// the turn ends or auto-skips. Game logic reads this.
   int lastDiceValue;
@@ -33,8 +35,9 @@ class GameState {
   GamePhase phase;
 
   /// How many extra rolls the current player still has coming before their
-  /// turn actually passes — rolling a 6, capturing, and finishing a token
-  /// each independently grant one (see turn_manager.dart's applyMove), and
-  /// they stack: a single move can trigger more than one at once.
+  /// turn actually passes — rolling a 6 (even one with no legal move),
+  /// capturing, and finishing a token each independently grant one (see
+  /// turn_manager.dart), and they stack: a single move can trigger more
+  /// than one at once.
   int bonusRollsRemaining;
 }

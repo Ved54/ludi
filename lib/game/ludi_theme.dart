@@ -52,4 +52,48 @@ class LudiNeutral {
   static const Color gridLine = Color(0xFFE4DCD0);
   static const Color textPrimary = Color(0xFF3A342C);
   static const Color textSecondary = Color(0xFF8A8175);
+
+  /// The board card the cells sit on — shows through the gaps between
+  /// cells as the grid.
+  static const Color boardBase = Color(0xFFEFE7DA);
+
+  /// Cards and panels floating over the page (HUD pods, dice face).
+  static const Color surface = Color(0xFFFFFDF9);
+
+  /// The dice's shaded side, faking depth.
+  static const Color diceSide = Color(0xFFE6DDCF);
+
+  /// Yard panel for a color nobody is playing this game.
+  static const Color emptyYard = Color(0xFFE9E2D6);
+}
+
+/// Typeface from style guide section 3, bundled in assets/fonts/.
+const String ludiFontFamily = 'Nunito';
+
+String colorLabel(PlayerColor color) =>
+    color.name[0].toUpperCase() + color.name.substring(1);
+
+/// Motion timings, in seconds — one place to tune the game's feel.
+class LudiMotion {
+  /// One square of a multi-square move.
+  static const double hopStep = 0.14;
+
+  /// Arc height of a single hop, board units (one cell = 24).
+  static const double hopHeight = 7;
+
+  /// Leaving the yard for the start square.
+  static const double enterDuration = 0.38;
+  static const double enterHeight = 24;
+
+  /// A captured token flying home to its yard.
+  static const double knockDuration = 0.6;
+  static const double knockHeight = 48;
+
+  static const double diceTumble = 0.65;
+  static const double diceTravel = 0.38;
+
+  /// Beat between a roll landing and the game acting on it (auto-move,
+  /// passing a wasted turn) so the player can read the die first.
+  static const double readBeat = 0.4;
+  static const double wastedRollHold = 0.75;
 }
