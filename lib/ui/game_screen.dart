@@ -11,7 +11,7 @@ import '../state/game_controller.dart';
 import 'widgets/token_icon.dart';
 
 /// One pass-and-play game: the Flame scene (board, HUD pods, die) fills
-/// the screen; Flutter adds the exit button and the winner card. One
+/// the screen; Flutter adds the exit button and the final standings. One
 /// GameController per screen, disposed with it.
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key, this.colors = PlayerColor.values});
@@ -101,7 +101,7 @@ class _GameScreenState extends State<GameScreen> {
                 listenable: _controller,
                 builder: (context, _) => _controller.state.phase == GamePhase.gameOver
                     ? _WinnerCard(
-                        winner: _controller.state.currentPlayer.color,
+                        standings: _controller.state.finishOrder,
                         onPlayAgain: _playAgain,
                         onHome: () => Navigator.of(context).pop(),
                       )
@@ -159,13 +159,17 @@ class _RoundButton extends StatelessWidget {
   }
 }
 
-/// Slides up over the board once the winner's confetti has started.
+/// Slides up over the board once the last place is settled: the winner
+/// up top, everyone else in the order they finished.
 class _WinnerCard extends StatelessWidget {
-  const _WinnerCard({required this.winner, required this.onPlayAgain, required this.onHome});
+  const _WinnerCard({required this.standings, required this.onPlayAgain, required this.onHome});
 
-  final PlayerColor winner;
+  /// Every player, first place first.
+  final List<PlayerColor> standings;
   final VoidCallback onPlayAgain;
   final VoidCallback onHome;
+
+  PlayerColor get winner => standings.first;
 
   @override
   Widget build(BuildContext context) {
@@ -185,7 +189,11 @@ class _WinnerCard extends StatelessWidget {
               child: Center(
                 child: Opacity(
                   opacity: appear.clamp(0.0, 1.0),
-                  child: Transform.translate(offset: Offset(0, 40 * (1 - appear)), child: child),
+                  child: Transform.translate(
+                    offset: Offset(0, 40 * (1 - appear)),
+                    // Scrolls if four places don't fit (small phone, large font).
+                    child: SingleChildScrollView(padding: const EdgeInsets.all(16), child: child),
+                  ),
                 ),
               ),
             ),
@@ -226,17 +234,9 @@ class _WinnerCard extends StatelessWidget {
                 color: palette.deep,
               ),
             ),
-            const SizedBox(height: 4),
-            const Text(
-              'All four tokens made it home.',
-              style: TextStyle(
-                fontFamily: ludiFontFamily,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: LudiNeutral.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 22),
+            const SizedBox(height: 14),
+            for (var i = 1; i < standings.length; i++) _PlaceRow(place: i + 1, color: standings[i]),
+            const SizedBox(height: 18),
             SizedBox(
               width: double.infinity,
               height: 52,
@@ -266,6 +266,46 @@ class _WinnerCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// "2nd  ♟ Red" — one runner-up line on the standings card.
+class _PlaceRow extends StatelessWidget {
+  const _PlaceRow({required this.place, required this.color});
+
+  final int place;
+  final PlayerColor color;
+
+  @override
+  Widget build(BuildContext context) {
+    const style = TextStyle(
+      fontFamily: ludiFontFamily,
+      fontSize: 17,
+      fontWeight: FontWeight.w800,
+      color: LudiNeutral.textPrimary,
+    );
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      decoration: BoxDecoration(
+        color: playerPalette[color]!.light,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 44,
+            child: Text(
+              placeLabel(place),
+              style: style.copyWith(color: LudiNeutral.textSecondary),
+            ),
+          ),
+          TokenIcon(color: color, size: 26),
+          const SizedBox(width: 8),
+          Expanded(child: Text(colorLabel(color), style: style)),
+        ],
       ),
     );
   }

@@ -73,6 +73,9 @@ const String ludiFontFamily = 'Nunito';
 String colorLabel(PlayerColor color) =>
     color.name[0].toUpperCase() + color.name.substring(1);
 
+/// "1st", "2nd", "3rd", "4th".
+String placeLabel(int place) => '$place${const {1: 'st', 2: 'nd', 3: 'rd'}[place] ?? 'th'}';
+
 /// Motion timings, in seconds — one place to tune the game's feel.
 class LudiMotion {
   /// One square of a multi-square move.
@@ -96,4 +99,10 @@ class LudiMotion {
   /// passing a wasted turn) so the player can read the die first.
   static const double readBeat = 0.4;
   static const double wastedRollHold = 0.75;
+
+  /// A third 6 in a row: long enough to read why the turn is over.
+  static const double forfeitHold = 1.3;
+
+  /// Pause on a player finishing in a place, before play moves on.
+  static const double placeBeat = 1.2;
 }

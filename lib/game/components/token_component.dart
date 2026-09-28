@@ -18,17 +18,28 @@ import '../token_painter.dart';
 /// catches up with the engine's distance when LudiGame plays the move, so
 /// a captured token keeps standing on its square until it is actually hit.
 /// At rest the token eases toward [restPosition]/[restScale], which
-/// LudiGame recomputes each frame so tokens sharing a square fan out
-/// instead of hiding each other.
+/// LudiGame works out so tokens sharing a square fan out instead of hiding
+/// each other — recomputed only when some token takes off, lands, or
+/// changes square ([onGroundChanged]), not every frame.
 class TokenComponent extends PositionComponent with HasGameReference<LudiGame> {
-  TokenComponent({required this.token})
-    : shownDistance = token.distance,
+  TokenComponent({required this.token, this.onGroundChanged})
+    : _shownDistance = token.distance,
       super(size: Vector2(24, 30), anchor: const Anchor(0.5, 0.8));
 
   final Token token;
 
+  /// Called when this token leaves the ground, lands, or changes square —
+  /// the moments the tokens resting on the board need re-seating.
+  final void Function()? onGroundChanged;
+
   /// Distance currently on screen (see class doc).
-  int shownDistance;
+  int get shownDistance => _shownDistance;
+  int _shownDistance;
+  set shownDistance(int value) {
+    if (value == _shownDistance) return;
+    _shownDistance = value;
+    onGroundChanged?.call();
+  }
 
   Vector2 restPosition = Vector2.zero();
   double restScale = 1;
@@ -48,6 +59,11 @@ class TokenComponent extends PositionComponent with HasGameReference<LudiGame> {
 
   bool get isAnimating => _hop != null;
 
+  /// Draw order while in the air — above every token on the ground (which
+  /// LudiGame layers by screen depth, 100 + y) and the capture burst, so a
+  /// hop or a knock-home never passes *under* a token it flies over.
+  static const int airbornePriority = 1000;
+
   /// The pawn's visual middle, for hit-testing taps.
   Vector2 get bodyCenter => position - Vector2(0, 10 * scale.y);
 
@@ -62,10 +78,12 @@ class TokenComponent extends PositionComponent with HasGameReference<LudiGame> {
     void Function()? onLand,
   }) {
     _hopDone?.complete();
+    priority = airbornePriority;
     _hop = HopPath([position.clone(), ...points], stepDuration: step, height: height);
     _hopDone = Completer<void>();
     _onLand = onLand;
     _spinTurns = spinTurns;
+    onGroundChanged?.call(); // whatever it stood with re-fans without it
     return _hopDone!.future;
   }
 
@@ -98,6 +116,7 @@ class TokenComponent extends PositionComponent with HasGameReference<LudiGame> {
       if (hop.isDone) {
         _hop = null;
         _spin = 0;
+        onGroundChanged?.call();
         final done = _hopDone;
         _hopDone = null;
         done?.complete();

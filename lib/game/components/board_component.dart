@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:flame/components.dart';
 import 'package:flame/events.dart';
+import 'package:flutter/widgets.dart' show WidgetsBinding;
 
 import '../../rules_engine/models/move.dart';
 import '../../rules_engine/models/player.dart';
@@ -14,8 +15,9 @@ import 'path_waypoints.dart';
 /// Renders the board — yards, the 52-square shared track, home columns,
 /// the center wedges, and all 8 safe squares (4 colored start squares + 4
 /// stars, matching capture_logic.dart's isSafeSquare) — plus the live
-/// layer: a glow on the active player's yard and a marker on every square
-/// the current roll can reach (a crosshair where the move captures).
+/// layer under the tokens: a glow on the active player's yard and the
+/// dotted route of a picked token. The markers on reachable squares are
+/// MoveHintsComponent children.
 ///
 /// The static board is painted once into a Picture; only the live layer
 /// is redrawn each frame. Board-local units: one cell = [cellSize].
@@ -33,6 +35,15 @@ class BoardComponent extends PositionComponent
   Vector2 basePosition = Vector2.zero();
 
   late final Picture _board = _paintStaticBoard();
+
+  /// [_board] rasterized at the current on-screen size. Replaying it as
+  /// vectors meant redrawing its blurred drop shadow and ~200 cells every
+  /// frame — the biggest avoidable per-frame GPU cost.
+  Image? _baked;
+  double _bakedPixels = 0;
+
+  /// Room around the board for its drop shadow, board units.
+  static const double _shadowMargin = 24;
   double _time = 0;
   double _shake = 0;
   final Random _rng = Random();
@@ -83,18 +94,52 @@ class BoardComponent extends PositionComponent
     );
   }
 
+  // Acts where the finger lifts; a drag or a slide off the board cancels.
   @override
-  void onTapDown(TapDownEvent event) => game.onBoardTap(event.localPosition);
+  void onTapUp(TapUpEvent event) => game.onBoardTap(event.localPosition);
 
   @override
   void render(Canvas canvas) {
-    canvas.drawPicture(_board);
+    _paintBaked(canvas);
     _paintActiveYard(canvas);
-    _paintMoveHints(canvas);
+    _paintRoutes(canvas);
+  }
+
+  @override
+  void onRemove() {
+    _baked?.dispose();
+    _baked = null;
+    super.onRemove();
   }
 
   // ---------------------------------------------------------------------
   // Static board
+
+  void _paintBaked(Canvas canvas) {
+    final view = WidgetsBinding.instance.platformDispatcher.implicitView;
+    final pixels = scale.x * (view?.devicePixelRatio ?? 1); // device px per unit
+    const extent = boardSize + 2 * _shadowMargin;
+    if (_baked == null || (pixels - _bakedPixels).abs() > 0.001) {
+      final recorder = PictureRecorder();
+      Canvas(recorder)
+        ..scale(pixels)
+        ..translate(_shadowMargin, _shadowMargin)
+        ..drawPicture(_board);
+      final picture = recorder.endRecording();
+      final side = (extent * pixels).ceil();
+      _baked?.dispose();
+      _baked = picture.toImageSync(side, side);
+      picture.dispose();
+      _bakedPixels = pixels;
+    }
+    final image = _baked!;
+    canvas.drawImageRect(
+      image,
+      Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+      Rect.fromLTWH(-_shadowMargin, -_shadowMargin, image.width / pixels, image.height / pixels),
+      Paint()..filterQuality = FilterQuality.medium,
+    );
+  }
 
   Picture _paintStaticBoard() {
     final recorder = PictureRecorder();
@@ -252,6 +297,14 @@ class BoardComponent extends PositionComponent
         14,
         Paint()..color = isSeated ? palette.light : LudiNeutral.boardBackground,
       );
+      // The color's mark, faint, so an empty yard still says whose it is
+      // without relying on hue.
+      if (isSeated) {
+        canvas.drawPath(
+          markPath(color, center, 5),
+          Paint()..color = palette.base.withValues(alpha: 0.45),
+        );
+      }
       canvas.drawCircle(
         center,
         14,
@@ -276,14 +329,17 @@ class BoardComponent extends PositionComponent
       Rect.fromLTWH(origin.x, origin.y, 6 * cellSize, 6 * cellSize).deflate(3),
       const Radius.circular(16),
     );
-    canvas.drawRRect(
-      panel,
-      Paint()
-        ..color = palette.base.withValues(alpha: 0.35 + 0.35 * pulse)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 6
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
-    );
+    // Soft halo from two wide translucent strokes — a blurred stroke looks
+    // the same but costs a blur pass every frame.
+    for (final (width, alpha) in [(11.0, 0.12), (6.0, 0.22)]) {
+      canvas.drawRRect(
+        panel,
+        Paint()
+          ..color = palette.base.withValues(alpha: alpha * (1 + pulse))
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = width,
+      );
+    }
     canvas.drawRRect(
       panel,
       Paint()
@@ -293,54 +349,14 @@ class BoardComponent extends PositionComponent
     );
   }
 
-  /// A marker on each square the current roll can reach. When a token
-  /// with several options is picked, only its options show, with the
-  /// route dotted in.
-  void _paintMoveHints(Canvas canvas) {
-    if (!game.canSelect) return;
+  /// With a token picked, dots on every square between it and each of its
+  /// options.
+  void _paintRoutes(Canvas canvas) {
     final picked = game.selectedToken;
+    if (!game.canSelect || picked == null) return;
     for (final move in game.controller.currentLegalMoves) {
-      if (picked != null && move.token != picked) continue;
-      if (picked != null) _paintRoute(canvas, move);
-      final at = positionForDistance(move.token.color, move.newDistance).toOffset();
-      final palette = playerPalette[move.token.color]!;
-      if (move.capturedToken != null) {
-        _paintCrosshair(canvas, at, palette.deep);
-      } else {
-        final pulse = 0.5 + 0.5 * sin(_time * 5);
-        canvas.drawCircle(at, 7.5 + pulse, Paint()..color = palette.base.withValues(alpha: 0.25));
-        canvas.drawCircle(
-          at,
-          7.5 + pulse,
-          Paint()
-            ..color = palette.deep
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.8,
-        );
-        canvas.drawCircle(at, 2.4, Paint()..color = palette.deep);
-      }
+      if (move.token == picked) _paintRoute(canvas, move);
     }
-  }
-
-  /// Rotating crosshair — this move lands a kill (forward or backward).
-  void _paintCrosshair(Canvas canvas, Offset at, Color color) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round;
-    final pulse = 0.5 + 0.5 * sin(_time * 6);
-    canvas.save();
-    canvas.translate(at.dx, at.dy);
-    canvas.drawCircle(Offset.zero, 13 + 1.5 * pulse, paint..color = color.withValues(alpha: 0.35));
-    paint.color = color;
-    canvas.rotate(_time * 1.6);
-    canvas.drawCircle(Offset.zero, 10, paint);
-    for (var i = 0; i < 4; i++) {
-      canvas.drawLine(const Offset(0, -13.5), const Offset(0, -7), paint);
-      canvas.rotate(pi / 2);
-    }
-    canvas.restore();
   }
 
   /// Dots on every square between a picked token and one of its options.

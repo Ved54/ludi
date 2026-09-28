@@ -5,6 +5,7 @@ import 'package:ludi/rules_engine/capture_logic.dart';
 import 'package:ludi/rules_engine/legal_moves.dart';
 import 'package:ludi/rules_engine/models/game_state.dart';
 import 'package:ludi/rules_engine/models/token.dart';
+import 'package:ludi/rules_engine/turn_manager.dart' show sixesToForfeit;
 import 'package:ludi/state/game_controller.dart';
 
 /// Board-wide rules that must hold between any two player actions.
@@ -39,6 +40,19 @@ void expectConsistent(GameState state, String where) {
     isNot(GamePhase.animating),
     reason: '$where: the controller never rests mid-move',
   );
+
+  // Finishers are done: all home, and never up to play again.
+  final finishers = state.phase == GamePhase.gameOver
+      ? state.finishOrder.sublist(0, state.finishOrder.length - 1)
+      : state.finishOrder;
+  for (final color in finishers) {
+    final player = state.players.firstWhere((p) => p.color == color);
+    expect(player.tokens.every((t) => t.state == TokenState.finished), isTrue, reason: where);
+  }
+  expect(state.sixesInARow, lessThan(sixesToForfeit), reason: where);
+  if (state.phase != GamePhase.gameOver) {
+    expect(state.finishOrder, isNot(contains(state.currentPlayer.color)), reason: where);
+  }
 }
 
 void main() {
@@ -60,10 +74,14 @@ void main() {
         expectConsistent(state, 'seed $seed action $actions');
       }
 
+      // Play went on until a single player was left, who takes last place.
+      expect(state.finishOrder.toSet(), state.players.map((p) => p.color).toSet(), reason: 'seed $seed');
+      expect(state.finishOrder, hasLength(state.players.length), reason: 'seed $seed');
+      final last = state.players.firstWhere((p) => p.color == state.finishOrder.last);
       expect(
-        state.currentPlayer.tokens.every((t) => t.state == TokenState.finished),
-        isTrue,
-        reason: 'seed $seed winner',
+        last.tokens.every((t) => t.state == TokenState.finished),
+        isFalse,
+        reason: 'seed $seed: last place still had tokens out',
       );
     }
   });
