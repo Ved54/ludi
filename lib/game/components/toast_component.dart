@@ -6,9 +6,11 @@ import 'package:flutter/painting.dart' show TextStyle;
 
 import '../ludi_theme.dart';
 
-/// Short callout over the middle of the board — "Captured!", "Roll
-/// again", "No moves". Pops in, holds long enough to read, fades out; a
-/// new message replaces whatever is showing.
+/// Short callout — "Captured!", "Home!", "Red wins!". Pops in, holds long
+/// enough to read, fades out; a new message replaces whatever is showing.
+///
+/// Shown at [home] (the board's center) unless given a spot, and kept
+/// horizontally inside [bounds] so a callout near the edge isn't cut off.
 class ToastComponent extends PositionComponent {
   ToastComponent() : super(anchor: Anchor.center, priority: 50);
 
@@ -20,14 +22,27 @@ class ToastComponent extends PositionComponent {
   Color _accent = LudiNeutral.textPrimary;
   double _age = -1;
 
-  void show(String text, {required Color accent, double hold = _hold}) {
+  /// Default spot for a callout, in game coordinates.
+  Vector2 home = Vector2.zero();
+
+  /// Area a callout must stay inside horizontally.
+  Rect bounds = Rect.largest;
+
+  void show(String text, {required Color accent, double hold = _hold, Vector2? at}) {
     _text = text;
     _accent = accent;
     _age = 0;
     _holdFor = hold;
+    position.setFrom(at ?? home);
   }
 
   double _holdFor = _hold;
+
+  /// The message on screen, or null when nothing is showing.
+  String? get text => _age >= 0 ? _text : null;
+
+  /// Seconds since [text] was shown — restarts on every [show].
+  double get age => _age;
 
   @override
   void update(double dt) {
@@ -55,7 +70,11 @@ class ToastComponent extends PositionComponent {
     final painter = _style.toTextPainter(_text);
     final width = painter.width + 44;
     const height = 42.0;
+    final left = bounds.left + width / 2;
+    final right = bounds.right - width / 2;
+    final nudge = left <= right ? position.x.clamp(left, right) - position.x : 0.0;
     canvas.save();
+    canvas.translate(nudge, 0);
     canvas.scale(0.7 + 0.3 * appear, 0.7 + 0.3 * appear);
     final pill = RRect.fromRectAndRadius(
       Rect.fromCenter(center: Offset.zero, width: width, height: height),

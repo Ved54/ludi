@@ -53,9 +53,8 @@ class GameController extends ChangeNotifier {
   }
 
   /// Applies [move], fires the animation/capture callbacks for Aditi's
-  /// Flame layer, then ends the turn — granting a bonus roll, advancing to
-  /// the next player, or declaring a winner. No-op unless [move] is one of
-  /// [currentLegalMoves] during [GamePhase.selecting].
+  /// Flame layer, then ends the turn (see [completeMove]). No-op unless
+  /// [move] is one of [currentLegalMoves] during [GamePhase.selecting].
   void selectMove(Move move) {
     if (_state.phase != GamePhase.selecting ||
         !_state.legalMoves.contains(move)) {
@@ -73,14 +72,15 @@ class GameController extends ChangeNotifier {
   }
 
   /// Resolves the move left pending in [GamePhase.animating] — granting a
-  /// bonus roll, advancing to the next player, or declaring a winner.
-  /// Called automatically unless [holdMovesForAnimation] is set. No-op
-  /// outside [GamePhase.animating].
+  /// bonus roll, advancing to the next player, placing a player who just
+  /// brought their last token home, or ending the game once one player is
+  /// left. Called automatically unless [holdMovesForAnimation] is set.
+  /// No-op outside [GamePhase.animating].
   void completeMove() {
     if (_state.phase != GamePhase.animating) return;
     turn_manager.completeTurn(_state);
     if (_state.phase == GamePhase.gameOver) {
-      onGameOver?.call(_state.currentPlayer.color);
+      onGameOver?.call(_state.finishOrder.first);
     }
     notifyListeners();
   }
@@ -88,6 +88,9 @@ class GameController extends ChangeNotifier {
   // Callbacks Aditi's Flame layer listens to, to trigger animation + sound.
   void Function(Move move)? onMoveAnimated;
   void Function(Token captured)? onCapture;
+
+  /// Fires once, when the game ends, with the first-place player (see
+  /// GameState.finishOrder for the rest of the places).
   void Function(PlayerColor winner)? onGameOver;
 }
 

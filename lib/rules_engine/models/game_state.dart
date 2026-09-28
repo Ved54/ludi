@@ -12,7 +12,10 @@ class GameState {
     this.phase = GamePhase.rolling,
     this.bonusRollsRemaining = 0,
     this.lastRoll = 0,
-  }) : legalMoves = legalMoves ?? [];
+    this.sixesInARow = 0,
+    List<PlayerColor>? finishOrder,
+  }) : legalMoves = legalMoves ?? [],
+       finishOrder = finishOrder ?? [];
 
   final List<Player> players;
   int currentPlayerIndex;
@@ -40,4 +43,14 @@ class GameState {
   /// turn_manager.dart), and they stack: a single move can trigger more
   /// than one at once.
   int bonusRollsRemaining;
+
+  /// 6s the current player has rolled back to back this turn. The third
+  /// one in a row doesn't count and ends the turn (see turn_manager.dart).
+  int sixesInARow;
+
+  /// The places, first to last. A player joins the moment their last
+  /// token comes home — the first is the winner — and the rest play on
+  /// without them. When only one player is left the game is over and that
+  /// player is added last, so at [GamePhase.gameOver] this lists everyone.
+  final List<PlayerColor> finishOrder;
 }
