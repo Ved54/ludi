@@ -138,9 +138,9 @@ void main() {
         }
       }
 
-      log('game $gameNo over: standings ${state.standings.map((c) => c.name).join(' > ')} after $rolls rolls, '
+      log('game $gameNo over: standings ${state.finishOrder.map((c) => c.name).join(' > ')} after $rolls rolls, '
           '$moves moves, $captures captures, $finishes finishes');
-      if (state.finishOrder.length != state.players.length - 1) {
+      if (state.finishOrder.length != state.players.length) {
         problems.add('game $gameNo ended with only ${state.finishOrder} placed');
       }
       await wait(2500);

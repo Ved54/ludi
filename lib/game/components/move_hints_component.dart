@@ -8,7 +8,8 @@ import '../ludi_theme.dart';
 import 'path_waypoints.dart';
 
 /// Markers on the squares the current roll can reach. When a token with
-/// several options is picked, only its options show.
+/// several options is picked, only its options show; a marker being
+/// previewed (tapped once, see LudiGame.armedMove) is drawn larger.
 ///
 /// Two layers on the board, either side of the tokens:
 ///
@@ -37,35 +38,40 @@ class MoveHintsComponent extends Component with HasGameReference<LudiGame> {
       if ((move.capturedToken != null) != _captures) continue;
       final at = positionForDistance(move.token.color, move.newDistance).toOffset();
       final palette = playerPalette[move.token.color]!;
-      _captures ? _paintCrosshair(canvas, at, palette.deep) : _paintMarker(canvas, at, palette);
+      final armed = move == game.armedMove;
+      _captures
+          ? _paintCrosshair(canvas, at, palette.deep, armed: armed)
+          : _paintMarker(canvas, at, palette, armed: armed);
     }
   }
 
-  void _paintMarker(Canvas canvas, Offset at, PlayerPalette palette) {
+  void _paintMarker(Canvas canvas, Offset at, PlayerPalette palette, {required bool armed}) {
     final pulse = 0.5 + 0.5 * sin(_time * 5);
-    canvas.drawCircle(at, 7.5 + pulse, Paint()..color = palette.base.withValues(alpha: 0.25));
+    final radius = armed ? 10.5 + 1.5 * pulse : 7.5 + pulse;
+    canvas.drawCircle(at, radius, Paint()..color = palette.base.withValues(alpha: armed ? 0.55 : 0.25));
     canvas.drawCircle(
       at,
-      7.5 + pulse,
+      radius,
       Paint()
         ..color = palette.deep
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.8,
+        ..strokeWidth = armed ? 2.4 : 1.8,
     );
-    canvas.drawCircle(at, 2.4, Paint()..color = palette.deep);
+    canvas.drawCircle(at, armed ? 3 : 2.4, Paint()..color = palette.deep);
   }
 
   /// Rotating crosshair — this move lands a kill (forward or backward).
-  void _paintCrosshair(Canvas canvas, Offset at, Color color) {
+  void _paintCrosshair(Canvas canvas, Offset at, Color color, {required bool armed}) {
     final paint = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
+      ..strokeWidth = armed ? 2.6 : 2
       ..strokeCap = StrokeCap.round;
     final pulse = 0.5 + 0.5 * sin(_time * 6);
     canvas.save();
     canvas.translate(at.dx, at.dy);
-    canvas.drawCircle(Offset.zero, 13 + 1.5 * pulse, paint..color = color.withValues(alpha: 0.35));
+    if (armed) canvas.drawCircle(Offset.zero, 12, Paint()..color = color.withValues(alpha: 0.18));
+    canvas.drawCircle(Offset.zero, (armed ? 15 : 13) + 1.5 * pulse, paint..color = color.withValues(alpha: 0.35));
     paint.color = color;
     canvas.rotate(_time * 1.6);
     canvas.drawCircle(Offset.zero, 10, paint);

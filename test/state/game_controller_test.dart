@@ -223,7 +223,7 @@ void main() {
       controller.rollDice();
       controller.selectMove(moveTo(controller, greenLast, 57));
       expect(winner, PlayerColor.red);
-      expect(controller.state.standings, [PlayerColor.red, PlayerColor.green, PlayerColor.yellow]);
+      expect(controller.state.finishOrder, [PlayerColor.red, PlayerColor.green, PlayerColor.yellow]);
     });
   });
 

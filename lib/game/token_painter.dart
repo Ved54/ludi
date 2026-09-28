@@ -44,6 +44,49 @@ Path _buildSilhouette() {
   );
 }
 
+/// Each color's shape — circle, triangle, square, cross — so tokens can be
+/// told apart without relying on hue: red and green look alike to many
+/// color-blind players, green and blue to others.
+enum PlayerMark { circle, triangle, square, cross }
+
+const Map<PlayerColor, PlayerMark> playerMarks = {
+  PlayerColor.red: PlayerMark.circle,
+  PlayerColor.green: PlayerMark.triangle,
+  PlayerColor.yellow: PlayerMark.square,
+  PlayerColor.blue: PlayerMark.cross,
+};
+
+/// [color]'s mark centred on [center], about 2 × [radius] across. Shapes
+/// are sized to look equally heavy, not to share exact bounds.
+Path markPath(PlayerColor color, Offset center, double radius) {
+  switch (playerMarks[color]!) {
+    case PlayerMark.circle:
+      return Path()..addOval(Rect.fromCircle(center: center, radius: radius * 0.82));
+    case PlayerMark.triangle:
+      final path = Path();
+      for (var i = 0; i < 3; i++) {
+        final angle = -pi / 2 + i * 2 * pi / 3;
+        final point = center + Offset(cos(angle), sin(angle)) * (radius * 1.12) + Offset(0, radius * 0.15);
+        i == 0 ? path.moveTo(point.dx, point.dy) : path.lineTo(point.dx, point.dy);
+      }
+      return path..close();
+    case PlayerMark.square:
+      return Path()..addRect(Rect.fromCenter(center: center, width: radius * 1.5, height: radius * 1.5));
+    case PlayerMark.cross:
+      final bar = radius * 0.62;
+      return Path.combine(
+        PathOperation.union,
+        Path()..addRect(Rect.fromCenter(center: center, width: radius * 2.1, height: bar)),
+        Path()..addRect(Rect.fromCenter(center: center, width: bar, height: radius * 2.1)),
+      );
+  }
+}
+
+/// Each pawn's mark, on its head — built once.
+final Map<PlayerColor, Path> _headMarks = {
+  for (final color in PlayerColor.values) color: markPath(color, const Offset(0, -18.2), 2.9),
+};
+
 /// Paints a pawn of [color]. [lift] raises the body off its ground shadow
 /// (hops), [squashX]/[squashY] deform it around the ground point (landing
 /// squash, take-off stretch), and [spin] rotates it (knocked tokens).
@@ -92,9 +135,22 @@ void paintPawn(
   // Deep-colored skirt and a small specular dot — depth without gradients.
   canvas.drawPath(_skirt, Paint()..color = palette.deep.withValues(alpha: 0.9 * opacity));
   canvas.drawOval(
-    Rect.fromCenter(center: const Offset(-2, -20.2), width: 3.6, height: 2.6),
+    Rect.fromCenter(center: const Offset(-3.3, -21.7), width: 2.2, height: 1.6),
     Paint()..color = const Color(0xFFFFFFFF).withValues(alpha: 0.55 * opacity),
   );
+
+  // The color's mark: white, keyed with a deep edge so it reads on the
+  // lightest pawn (yellow) as well as the darkest.
+  final mark = _headMarks[color]!;
+  canvas.drawPath(
+    mark,
+    Paint()
+      ..color = palette.deep.withValues(alpha: opacity)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2
+      ..strokeJoin = StrokeJoin.round,
+  );
+  canvas.drawPath(mark, Paint()..color = const Color(0xFFFFFFFF).withValues(alpha: opacity));
 
   canvas.drawPath(
     _silhouette,

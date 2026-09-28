@@ -12,6 +12,7 @@ class GameState {
     this.phase = GamePhase.rolling,
     this.bonusRollsRemaining = 0,
     this.lastRoll = 0,
+    this.sixesInARow = 0,
     List<PlayerColor>? finishOrder,
   }) : legalMoves = legalMoves ?? [],
        finishOrder = finishOrder ?? [];
@@ -43,16 +44,13 @@ class GameState {
   /// than one at once.
   int bonusRollsRemaining;
 
-  /// Players who have brought all four tokens home, in the order they did
-  /// it — the first is the winner. The rest play on for the places
-  /// without them; the game is over once a single player is left.
-  final List<PlayerColor> finishOrder;
+  /// 6s the current player has rolled back to back this turn. The third
+  /// one in a row doesn't count and ends the turn (see turn_manager.dart).
+  int sixesInARow;
 
-  /// Final places, first to last: everyone who finished, in order, then
-  /// whoever is still playing.
-  List<PlayerColor> get standings => [
-    ...finishOrder,
-    for (final p in players)
-      if (!finishOrder.contains(p.color)) p.color,
-  ];
+  /// The places, first to last. A player joins the moment their last
+  /// token comes home — the first is the winner — and the rest play on
+  /// without them. When only one player is left the game is over and that
+  /// player is added last, so at [GamePhase.gameOver] this lists everyone.
+  final List<PlayerColor> finishOrder;
 }

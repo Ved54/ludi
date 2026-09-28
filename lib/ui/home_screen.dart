@@ -312,7 +312,7 @@ class _Rules extends StatelessWidget {
     (Icons.rotate_right_rounded, 'Race clockwise', 'Go once round the board, then up your colored lane. Land exactly on home.'),
     (Icons.gps_fixed_rounded, 'Capture', 'Land on an opponent to send them back to their yard. Stars and start squares are safe.'),
     (Icons.undo_rounded, 'The twist: strike backward', 'You may move a token backward — but only if it lands on an opponent and captures it.'),
-    (Icons.replay_rounded, 'Bonus rolls', 'A 6, a capture, or bringing a token home each earn another roll — and they add up.'),
+    (Icons.replay_rounded, 'Bonus rolls', 'A 6, a capture, or bringing a token home each earn another roll — and they add up. Three 6s in a row, though, and your turn is over.'),
     (Icons.emoji_events_rounded, 'Win', 'First to bring all four tokens home wins — the rest play on for the other places.'),
   ];
 

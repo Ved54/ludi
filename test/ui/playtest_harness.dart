@@ -34,6 +34,7 @@ class PlaytestReport {
   int tokensCaptured = 0;
   int finishes = 0;
   int autoMoves = 0;
+  int forfeits = 0;
   int chaosTaps = 0;
   int longestBusyFrames = 0;
   final Map<String, int> toasts = {};
@@ -47,7 +48,7 @@ class PlaytestReport {
       'winner=$winner frames=$frames (${(frames * 16 / 1000 / 60).toStringAsFixed(1)} min) '
       'rolls=$rolls sixes=$sixes wasted=$wastedRolls moves=$moves auto=$autoMoves '
       'backward=$backwardMoves captures=$captures ($tokensCaptured tokens) '
-      'finishes=$finishes chaosTaps=$chaosTaps '
+      'finishes=$finishes forfeits=$forfeits chaosTaps=$chaosTaps '
       'longestBusy=${(longestBusyFrames * 16 / 1000).toStringAsFixed(2)}s\n'
       'toasts=$toasts';
 }
@@ -263,7 +264,11 @@ class Playtester {
           'bobbing ${game.movableTokens.map((t) => t.id)} legal ${legal.map((t) => t.id)} idleFrames $_idleFrames',
         );
       }
-      final want = game.selectedToken == null ? ['Pick a token', 'Tap a token'] : ['Pick a square'];
+      final want = game.selectedToken == null
+          ? ['Pick a token', 'Tap a token']
+          : game.armedMove != null
+          ? ['Tap again']
+          : ['Pick a square'];
       if (!want.contains(game.prompt)) violation('prompt:$want', 'shows "${game.prompt}"');
       final effective = {for (final m in state.legalMoves) m.token.distance};
       if (effective.length == 1 && game.selectedToken == null) {
@@ -304,13 +309,14 @@ class Playtester {
     await pumpFor(1.5);
     if (state.phase == GamePhase.gameOver) {
       report.winner = state.finishOrder.first;
-      // Play went on until one player was left; every finisher is home.
-      if (state.finishOrder.length != state.players.length - 1) {
+      // Play went on until one player was left: every place is filled, and
+      // everyone but last place brought all four tokens home.
+      if (state.finishOrder.length != state.players.length) {
         violation('ended-early', 'finish order ${state.finishOrder}');
       }
       for (final p in state.players) {
         final home = p.tokens.every((t) => t.distance == maxDistance);
-        if (home != state.finishOrder.contains(p.color)) {
+        if (home == (state.finishOrder.last == p.color)) {
           violation('bad-standings', '${p.color} home=$home, order ${state.finishOrder}');
         }
       }
@@ -364,12 +370,15 @@ class Playtester {
 
     if (!wasSelecting) {
       report.wastedRolls++;
+      // A 6 that passes the turn is only ever the third in a row.
+      final forfeited = roll == 6 && state.currentPlayerIndex != roller;
+      if (forfeited) report.forfeits++;
       final waiting = state.players[roller].tokens.every((t) => t.distance == 0 || t.distance == maxDistance);
       await pumpFor(0.1);
-      final want = waiting ? 'Need a 6' : 'No moves';
+      final want = forfeited ? 'Three 6s!' : (waiting ? 'Need a 6' : 'No moves');
       if (game.prompt != want) violation('prompt:$want', 'wasted $roll shows "${game.prompt}"');
       await waitUntilIdle();
-      _expectToasts([], 'wasted roll of $roll');
+      _expectToasts([if (forfeited) 'Three 6s · turn over'], 'wasted roll of $roll');
       _expectRollPrompt(roller);
       return;
     }
@@ -399,7 +408,25 @@ class Playtester {
         );
 
     if (markerIsClear && rng.nextBool()) {
+      // A marker plays at once only while its token's routes are showing;
+      // tapped cold, the first tap previews and the second plays.
+      final picked = game.selectedToken;
+      final routeShowing = picked != null && picked.distance == move.token.distance;
       await tester.tapAt(boardToScreen(marker));
+      if (!routeShowing) {
+        await pumpFrame();
+        if (!game.canSelect) {
+          violation('marker-played-cold', 'one tap on a cold marker moved ${move.token.id}');
+          await _afterMove(snapshot, roller, roll, expected: move);
+          return;
+        }
+        final armed = game.armedMove;
+        if (armed == null || armed.newDistance != move.newDistance || armed.token.distance != move.token.distance) {
+          violation('no-preview', 'tapping the marker for ${move.token.id} previewed ${armed?.token.id}');
+        }
+        await pumpFor(0.25);
+        await tester.tapAt(boardToScreen(marker));
+      }
     } else {
       await tester.tapAt(boardToScreen(component.bodyCenter));
       await pumpFrame();
@@ -480,7 +507,7 @@ class Playtester {
 
     // A player whose last token came home takes a place; the callout
     // replaces "Home!" on the same frame.
-    final place = state.finishOrder.length > placesBefore ? state.finishOrder.length : null;
+    final place = state.finishOrder.length > placesBefore ? placesBefore + 1 : null;
     _expectToasts([
       if (captured.isNotEmpty) backward ? 'Backstrike!' : 'Captured!',
       if (finished && place == null) 'Home!',

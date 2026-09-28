@@ -34,6 +34,8 @@ class DiceComponent extends PositionComponent
   double _spinDirection = 1;
   double _lift = 0;
   double _pop = 0;
+  double _press = 0; // eased 0-1 while a finger is down on the die
+  bool _pressed = false;
   double _time = 0;
 
   static const Map<int, List<(double, double)>> _pips = {
@@ -102,14 +104,26 @@ class DiceComponent extends PositionComponent
     );
   }
 
+  // The roll happens when the finger lifts — sliding off first cancels it —
+  // so the die only dips while pressed.
   @override
-  void onTapDown(TapDownEvent event) => game.requestRoll();
+  void onTapDown(TapDownEvent event) => _pressed = game.canRoll;
+
+  @override
+  void onTapUp(TapUpEvent event) {
+    _pressed = false;
+    game.requestRoll();
+  }
+
+  @override
+  void onTapCancel(TapCancelEvent event) => _pressed = false;
 
   @override
   void update(double dt) {
     super.update(dt);
     _time += dt;
     _pop = max(0, _pop - dt * 3.5);
+    _press += ((_pressed ? 1 : 0) - _press) * min(1, dt * 25);
 
     if (_rolling) {
       _tumble += dt;
@@ -138,7 +152,7 @@ class DiceComponent extends PositionComponent
     }
 
     final breathe = game.canRoll ? 0.035 * sin(_time * 4) : 0;
-    scale.setAll(1 + breathe + 0.22 * sin(pi * _pop) * _pop);
+    scale.setAll(1 + breathe + 0.22 * sin(pi * _pop) * _pop - 0.08 * _press);
   }
 
   @override

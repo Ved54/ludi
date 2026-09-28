@@ -101,7 +101,7 @@ class _GameScreenState extends State<GameScreen> {
                 listenable: _controller,
                 builder: (context, _) => _controller.state.phase == GamePhase.gameOver
                     ? _WinnerCard(
-                        standings: _controller.state.standings,
+                        standings: _controller.state.finishOrder,
                         onPlayAgain: _playAgain,
                         onHome: () => Navigator.of(context).pop(),
                       )

@@ -94,8 +94,9 @@ class BoardComponent extends PositionComponent
     );
   }
 
+  // Acts where the finger lifts; a drag or a slide off the board cancels.
   @override
-  void onTapDown(TapDownEvent event) => game.onBoardTap(event.localPosition);
+  void onTapUp(TapUpEvent event) => game.onBoardTap(event.localPosition);
 
   @override
   void render(Canvas canvas) {
@@ -296,6 +297,14 @@ class BoardComponent extends PositionComponent
         14,
         Paint()..color = isSeated ? palette.light : LudiNeutral.boardBackground,
       );
+      // The color's mark, faint, so an empty yard still says whose it is
+      // without relying on hue.
+      if (isSeated) {
+        canvas.drawPath(
+          markPath(color, center, 5),
+          Paint()..color = palette.base.withValues(alpha: 0.45),
+        );
+      }
       canvas.drawCircle(
         center,
         14,

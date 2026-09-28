@@ -28,9 +28,9 @@ Ludi is a bidirectional Ludo variant. It plays by classic Ludo rules with one tw
 - **Home:** distance 1–51 is the shared track, 52–56 the private home column, 57 the finish. The finish needs an exact roll — overshooting isn't a legal move.
 - **Capture:** landing on a non-safe square sends every opponent token there back to its yard (a stacked pair goes home together), so no non-safe square is ever shared by two colors.
 - **Backward:** only as a kill, and only onto the shared track — a token in its home column may strike back out onto the track, but never steps backward within the column.
-- **Bonus rolls:** rolling a 6, capturing, and finishing a token each earn one extra roll, and they stack (a 6 that captures earns two). A 6 with no legal move still earns its re-roll. No cap on consecutive 6s.
+- **Bonus rolls:** rolling a 6, capturing, and finishing a token each earn one extra roll, and they stack (a 6 that captures earns two). A 6 with no legal move still earns its re-roll. **Three 6s in a row:** the third doesn't count — no move, any bonus rolls still owed are lost, and the turn passes (moves made with the first two stand).
 - **No legal move:** the roll is wasted; the turn passes unless a bonus roll is still owed.
-- **Winning:** the first player to bring all 4 tokens home wins. The others play on for the remaining places — a player who has finished is skipped (and any bonus rolls they were owed lapse) — until only one player is left, who takes last place. With 2 players the first finish ends the game. `GameState.finishOrder` records the places.
+- **Winning:** the first player to bring all 4 tokens home wins. The others play on for the remaining places — a player who has finished is skipped (and any bonus rolls they were owed lapse) — until only one player is left, who takes last place. With 2 players the first finish ends the game. `GameState.finishOrder` records the places; when the game ends the last player is added, so it lists everyone.
 
 **Team:** two developers — Vedant (code & logic, owns the repo/folder structure) and Aditi (creative & rendering).
 **Target:** Google Play. **MVP monetization:** none — fully free for now (see Section 8).
@@ -84,7 +84,8 @@ class GameState {
   int currentPlayerIndex;
   int lastDiceValue;
   List<Move> legalMoves;   // recalculated each turn
-  List<PlayerColor> finishOrder; // who has finished, in order — [0] is the winner
+  List<PlayerColor> finishOrder; // places so far, [0] = winner; complete at gameOver
+  int sixesInARow;               // this turn's run of 6s — the 3rd forfeits the turn
   GamePhase phase;          // rolling, selecting, animating, gameOver
 }
 
@@ -197,8 +198,8 @@ class GameController extends ChangeNotifier {
   // - onMoveAnimated(Move move)
   // - onCapture(Token captured)
   // - onGameOver(PlayerColor winner) — fires once, when a single player is
-  //   left; winner is 1st place (state.finishOrder / state.standings has
-  //   the rest)
+  //   left; winner is 1st place (state.finishOrder then lists every
+  //   player, first to last)
 }
 ```
 
@@ -255,7 +256,7 @@ ludi/
 
 - **Rules engine:** unit tests only. Cover forward/backward legality, capture in both directions, home-stretch boundary, yard-retreat floor.
 - **Flame layer:** manual testing is fine given the solo-hobby time budget per person — full widget/integration coverage isn't worth the investment here.
-- **Playtests (added after the UI rebuild):** `test/ui/playtest_test.dart` plays whole 4-player games through real taps (plus one with random taps everywhere mid-animation) and checks every frame that the screen agrees with the engine — token positions, HUD home counts, whose turn it shows, the die face, draw order of tokens in the air, callouts and prompts (`test/ui/playtest_harness.dart`). `test/ui/layout_test.dart` covers screen sizes and system font sizes. `integration_test/full_house_test.dart` plays three full games on a real device: `flutter test integration_test/full_house_test.dart -d <device-id>`.
+- **Playtests (added after the UI rebuild):** `test/ui/playtest_test.dart` plays whole 4-player games through real taps (plus one with random taps everywhere mid-animation) and checks every frame that the screen agrees with the engine — token positions, HUD home counts, whose turn it shows, the die face, draw order of tokens in the air, callouts and prompts (`test/ui/playtest_harness.dart`). `test/ui/director_test.dart` pins down the tap rules (auto-pick, marker preview, lift-to-commit) and the three-6s message. `test/ui/layout_test.dart` covers screen sizes and system font sizes. `integration_test/full_house_test.dart` plays three full games on a real device: `flutter test integration_test/full_house_test.dart -d <device-id>`.
 
 ---
 
@@ -303,7 +304,7 @@ Vedant creates the repo and pushes the full folder skeleton with contract stubs 
 | A6 | UI screens | Home, game screen, HUD, game-over | `lib/ui/` | V6 full controller — **mockable for layout**, real for final wiring |
 | A7 | Branding | App icon, Play Store graphics, splash screen | `assets/`, store listing | none |
 
-**Status:** A1–A3 by Aditi. At the project owner's request, Vedant's instance then built out A4 (hop / capture / home animations in `lib/game/effects/`, driven by `LudiGame`), A6 (home screen with player count + rules, game screen, HUD pods, winner card) and reworked A2/A3 to match (tiled board, token stacking, dice handoff). Nunito is bundled in `assets/fonts/`. A full playtest pass followed (see Section 8). The game layer reports captures without taking over `GameController.onCapture`, so the audio layer is free to use all three callbacks. **Still open:** A5 audio (no sound assets yet) and A7 branding (app icon; the Android splash only got the palette background).
+**Status:** A1–A3 by Aditi. At the project owner's request, Vedant's instance then built out A4 (hop / capture / home animations in `lib/game/effects/`, driven by `LudiGame`), A6 (home screen with player count + rules, game screen, HUD pods, winner card) and reworked A2/A3 to match (tiled board, token stacking, dice handoff). Nunito is bundled in `assets/fonts/`. A full playtest pass followed (see Section 8). The game layer reports captures without taking over `GameController.onCapture`, so the audio layer is free to use all three callbacks. After the MVP audit: every pawn carries its color's shape (red circle, green triangle, yellow square, blue cross) so tokens don't rely on hue alone; board, die and pod taps act on finger-lift (a drag cancels); tapping a token with one destination moves it, while a destination marker tapped cold only previews the move and a second tap plays it; token stacks are re-laid out only when a token takes off, lands or changes square. **Still open:** A5 audio (no sound assets yet) and A7 branding (app icon; the Android splash only got the palette background).
 
 ---
 

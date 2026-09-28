@@ -100,6 +100,74 @@ void main() {
       expect(state.currentPlayerIndex, 1);
     });
 
+    group('three 6s in a row', () {
+      test('the third doesn\'t count and the turn passes; earlier moves stand', () {
+        final token = tokenAt(PlayerColor.red, 10);
+        final state = redVsGreen([token], [Token(id: 'g1', color: PlayerColor.green)]);
+
+        applyMove(state, rollFor(state, 6, token, 16));
+        completeTurn(state);
+        applyMove(state, rollFor(state, 6, token, 22));
+        completeTurn(state);
+        expect(state.sixesInARow, 2);
+        expect(state.currentPlayer.color, PlayerColor.red, reason: 'two 6s: still red');
+
+        roll(state, 6);
+
+        expect(state.currentPlayer.color, PlayerColor.green);
+        expect(state.phase, GamePhase.rolling);
+        expect(state.legalMoves, isEmpty, reason: 'the third 6 is never played');
+        expect(token.distance, 22, reason: 'moves from the first two 6s stand');
+        expect(state.lastRoll, 6, reason: 'the die still shows what was rolled');
+        expect(state.sixesInARow, 0);
+      });
+
+      test('bonus rolls still owed are lost with the turn', () {
+        final token = tokenAt(PlayerColor.red, 10);
+        final state = redVsGreen([token], [Token(id: 'g1', color: PlayerColor.green)]);
+        applyMove(state, rollFor(state, 6, token, 16));
+        completeTurn(state);
+        applyMove(state, rollFor(state, 6, token, 22));
+        completeTurn(state);
+        state.bonusRollsRemaining = 2; // say, from captures on the way
+
+        roll(state, 6);
+
+        expect(state.currentPlayer.color, PlayerColor.green);
+        expect(state.bonusRollsRemaining, 0);
+      });
+
+      test('wasted 6s count toward the run too', () {
+        // Deep in the home column: every 6 overshoots.
+        final state = redVsGreen([tokenAt(PlayerColor.red, 54)], [Token(id: 'g1', color: PlayerColor.green)]);
+
+        roll(state, 6);
+        roll(state, 6);
+        expect(state.currentPlayer.color, PlayerColor.red);
+        roll(state, 6);
+
+        expect(state.currentPlayer.color, PlayerColor.green);
+      });
+
+      test('any other roll breaks the run', () {
+        final token = tokenAt(PlayerColor.red, 10);
+        final state = redVsGreen([token], [Token(id: 'g1', color: PlayerColor.green)]);
+        applyMove(state, rollFor(state, 6, token, 16));
+        completeTurn(state);
+        applyMove(state, rollFor(state, 6, token, 22));
+        completeTurn(state);
+        state.bonusRollsRemaining = 1;
+
+        applyMove(state, rollFor(state, 2, token, 24));
+        completeTurn(state); // uses the owed bonus roll
+        expect(state.sixesInARow, 0);
+        applyMove(state, rollFor(state, 6, token, 30));
+
+        expect(state.phase, GamePhase.animating, reason: 'a fresh run: this 6 plays');
+        expect(state.sixesInARow, 1);
+      });
+    });
+
     test('gathers both forward and backward moves when both are legal', () {
       final redToken = tokenAt(PlayerColor.red, 10); // square 9
       final greenBlocker = tokenAt(PlayerColor.green, distanceOn(PlayerColor.green, 6));
@@ -265,8 +333,7 @@ void main() {
       completeTurn(state);
 
       expect(state.phase, GamePhase.gameOver);
-      expect(state.finishOrder, [PlayerColor.red]);
-      expect(state.standings, [PlayerColor.red, PlayerColor.green]);
+      expect(state.finishOrder, [PlayerColor.red, PlayerColor.green]);
       expect(state.legalMoves, isEmpty);
     });
 
@@ -297,8 +364,11 @@ void main() {
       completeTurn(state);
 
       expect(state.phase, GamePhase.gameOver);
-      expect(state.finishOrder, [PlayerColor.blue, PlayerColor.red, PlayerColor.yellow]);
-      expect(state.standings.last, PlayerColor.green);
+      expect(
+        state.finishOrder,
+        [PlayerColor.blue, PlayerColor.red, PlayerColor.yellow, PlayerColor.green],
+        reason: 'the one player left is added as last place',
+      );
     });
 
     test('advances to the next player when no bonus roll is owed', () {
@@ -381,6 +451,7 @@ void main() {
       state
         ..lastDiceValue = 5
         ..bonusRollsRemaining = 2
+        ..sixesInARow = 2
         ..legalMoves = [
           Move(
             token: Token(id: 'r1', color: PlayerColor.red),
@@ -394,6 +465,7 @@ void main() {
 
       expect(state.lastDiceValue, 0);
       expect(state.bonusRollsRemaining, 0);
+      expect(state.sixesInARow, 0);
       expect(state.legalMoves, isEmpty);
       expect(state.phase, GamePhase.rolling);
     });

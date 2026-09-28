@@ -80,7 +80,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 16));
       final game = tester.widget<GameWidget<LudiGame>>(find.byType(GameWidget<LudiGame>)).game!;
       game.controller.state
-        ..finishOrder.addAll([PlayerColor.blue, PlayerColor.red, PlayerColor.green])
+        ..finishOrder.addAll([PlayerColor.blue, PlayerColor.red, PlayerColor.green, PlayerColor.yellow])
         ..phase = GamePhase.gameOver;
       tester.element(find.byType(GameScreen)).markNeedsBuild();
       for (var i = 0; i < 100; i++) {

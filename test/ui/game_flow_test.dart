@@ -55,9 +55,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
     }
     final state = game.controller.state;
-    expect(state.finishOrder, hasLength(colors.length - 1), reason: 'played on for every place');
+    expect(state.finishOrder.toSet(), colors.toSet(), reason: 'played on for every place');
+    expect(state.finishOrder, hasLength(colors.length));
     expect(find.text('${colorLabel(state.finishOrder.first)} wins!'), findsOneWidget);
-    expect(state.standings.toSet(), colors.toSet());
   }
 
   testWidgets('a 2-player game plays through to the standings card', (tester) async {

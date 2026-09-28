@@ -100,6 +100,9 @@ class LudiMotion {
   static const double readBeat = 0.4;
   static const double wastedRollHold = 0.75;
 
+  /// A third 6 in a row: long enough to read why the turn is over.
+  static const double forfeitHold = 1.3;
+
   /// Pause on a player finishing in a place, before play moves on.
   static const double placeBeat = 1.2;
 }

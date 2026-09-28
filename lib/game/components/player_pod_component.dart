@@ -5,7 +5,6 @@ import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 import 'package:flutter/painting.dart' show TextStyle;
 
-import '../../rules_engine/models/game_state.dart';
 import '../../rules_engine/models/player.dart';
 import '../ludi_game.dart';
 import '../ludi_theme.dart';
@@ -55,9 +54,7 @@ class PlayerPodComponent extends PositionComponent
   /// This player's final place once they have one — on finishing, or last
   /// place for whoever is left when the game ends.
   int? get place {
-    final state = game.controller.state;
-    final order = state.phase == GamePhase.gameOver ? state.standings : state.finishOrder;
-    final index = order.indexOf(color);
+    final index = game.controller.state.finishOrder.indexOf(color);
     return index < 0 ? null : index + 1;
   }
 
@@ -67,8 +64,9 @@ class PlayerPodComponent extends PositionComponent
   Vector2 get diceSlot =>
       position + Vector2(dockOnRight ? size.x - _dockWidth / 2 : _dockWidth / 2, size.y / 2);
 
+  // Acts when the finger lifts, like a button: sliding off cancels.
   @override
-  void onTapDown(TapDownEvent event) {
+  void onTapUp(TapUpEvent event) {
     if (game.activeColor == color) game.requestRoll();
   }
 

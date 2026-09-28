@@ -53,8 +53,14 @@ class LudiGame extends FlameGame {
   /// player until the die has actually traveled over.
   PlayerColor activeColor;
 
-  /// Token picked by a tap when it had more than one option.
+  /// Token picked by a tap when it had more than one option — or whose
+  /// marker was tapped once. Its routes show; a tap on one of its markers
+  /// plays that move.
   Token? selectedToken;
+
+  /// The marker tapped once while no token was picked: previewed (route
+  /// dotted in, marker enlarged) and played by a second tap.
+  Move? armedMove;
 
   /// Short instruction shown in the active player's pod.
   String? prompt = 'Tap to roll';
@@ -109,7 +115,7 @@ class LudiGame extends FlameGame {
     await _board.addAll([MoveHintsComponent.landings(), MoveHintsComponent.targets()]);
     for (final player in _state.players) {
       for (final token in player.tokens) {
-        final component = TokenComponent(token: token);
+        final component = TokenComponent(token: token, onGroundChanged: _groundChanged);
         _tokens[token] = component;
         await _board.add(component);
       }
@@ -186,7 +192,7 @@ class LudiGame extends FlameGame {
 
   @override
   void update(double dt) {
-    _layoutTokens();
+    _layoutTokensIfNeeded();
     super.update(dt);
   }
 
@@ -194,6 +200,18 @@ class LudiGame extends FlameGame {
   // Token layout: where each resting token sits, fanning out stacks.
 
   static const double _groundDrop = 7;
+
+  /// Set whenever a token takes off, lands or changes square — the only
+  /// times the resting layout can change — and cleared once it's redone.
+  bool _layoutStale = true;
+
+  void _groundChanged() => _layoutStale = true;
+
+  void _layoutTokensIfNeeded() {
+    if (!_layoutStale) return;
+    _layoutStale = false;
+    _layoutTokens();
+  }
 
   void _layoutTokens() {
     final groups = <String, List<TokenComponent>>{};
@@ -250,7 +268,7 @@ class LudiGame extends FlameGame {
   Future<void> requestRoll() async {
     if (!canRoll) return;
     _busy = true;
-    selectedToken = _autoPick = null;
+    selectedToken = _autoPick = armedMove = null;
     prompt = 'Rolling…';
     final roller = _state.currentPlayer;
     _haptic(HapticFeedback.lightImpact);
@@ -279,12 +297,18 @@ class LudiGame extends FlameGame {
       return;
     }
 
-    // Wasted roll: nothing could move. Say why in the pod, where the
-    // player is looking, and shake the die "no".
+    // No move this roll. Say why in the pod, where the player is looking,
+    // and shake the die "no". A 6 that ends the turn can only be the third
+    // in a row — that one gets the big callout too.
+    final forfeited = _state.lastRoll == 6 && _state.currentPlayer != roller;
     final waiting = roller.tokens.every((t) => t.distance == 0 || t.distance == maxDistance);
-    prompt = waiting ? 'Need a 6' : 'No moves';
+    prompt = forfeited ? 'Three 6s!' : (waiting ? 'Need a 6' : 'No moves');
+    if (forfeited) {
+      _toast.show('Three 6s · turn over', accent: playerPalette[roller.color]!.base);
+      _haptic(HapticFeedback.heavyImpact);
+    }
     _dice.shakeNo();
-    await _wait(LudiMotion.wastedRollHold);
+    await _wait(forfeited ? LudiMotion.forfeitHold : LudiMotion.wastedRollHold);
     await _nextTurn();
   }
 
@@ -304,10 +328,12 @@ class LudiGame extends FlameGame {
   // ---------------------------------------------------------------------
   // Choosing and playing a move
 
-  /// A tap on the board, in board-local coordinates. Tapping a movable
-  /// token plays it when all its options land on the same square;
-  /// otherwise it gets picked, its options are marked, and the next tap on
-  /// one of them plays it. A marker can also be tapped directly.
+  /// A tap on the board, in board-local coordinates (acted on when the
+  /// finger lifts). Tapping a movable token plays it when all its options
+  /// land on the same square; otherwise it gets picked and its options are
+  /// marked with their routes. A marker plays only once its route is
+  /// showing: tapped cold, the first tap previews the move and the second
+  /// plays it, so a stray tap near a marker can't make a move.
   void onBoardTap(Vector2 at) {
     if (!canSelect) return;
     final moves = controller.currentLegalMoves;
@@ -353,24 +379,32 @@ class LudiGame extends FlameGame {
     }
   }
 
-  /// Two different tokens can reach one square (one forward, one striking
-  /// back); then the marker alone doesn't say which to move.
+  /// A marker tapped while no token is picked: preview that move — pick
+  /// its token, dot in the route, enlarge the marker — and wait for a
+  /// second tap. Two different tokens can reach one square (one forward,
+  /// one striking back); then the marker alone doesn't say which to move.
   void _tapMarker(Move move) {
     final rivals = controller.currentLegalMoves.where(
       (m) => m.newDistance == move.newDistance && m.token.distance != move.token.distance,
     );
     if (rivals.isEmpty) {
-      _play(move);
+      _choose(move.token, armed: move);
     } else {
       prompt = 'Tap a token';
-      _haptic(HapticFeedback.selectionClick);
     }
+    _haptic(HapticFeedback.selectionClick);
   }
 
-  /// Picks [token] (null: none) and says what the player should do next.
-  void _choose(Token? token) {
+  /// Picks [token] (null: none), optionally previewing one of its moves,
+  /// and says what the player should do next.
+  void _choose(Token? token, {Move? armed}) {
     selectedToken = token;
-    prompt = token == null ? 'Pick a token' : 'Pick a square';
+    armedMove = armed;
+    prompt = token == null
+        ? 'Pick a token'
+        : armed != null
+        ? 'Tap again'
+        : 'Pick a square';
   }
 
   (Token, double)? _nearestToken(Vector2 at) {
@@ -406,7 +440,7 @@ class LudiGame extends FlameGame {
     final captured = [for (final t in onTrack) if (t.distance == 0) t];
 
     _busy = true;
-    selectedToken = _autoPick = null;
+    selectedToken = _autoPick = armedMove = null;
     prompt = 'Moving…';
     final color = move.token.color;
 
@@ -419,7 +453,7 @@ class LudiGame extends FlameGame {
       onLand: () => _haptic(HapticFeedback.selectionClick),
     );
     mover.shownDistance = move.newDistance;
-    _layoutTokens(); // back into the ground layer before anything else flies
+    _layoutTokensIfNeeded(); // back into the ground layer before anything else flies
 
     // Only the moments worth stopping for get the big callout, right on
     // impact; a bonus roll is announced in the pod (see _nextTurn).
@@ -455,8 +489,9 @@ class LudiGame extends FlameGame {
 
     // Last token home: this player takes a place. The first gets the
     // confetti; the rest of the table plays on for the other places.
-    final place = _state.finishOrder.length;
-    if (place > placesBefore) {
+    // (At game over the last player left is added to finishOrder too.)
+    if (_state.finishOrder.length > placesBefore) {
+      final place = placesBefore + 1;
       prompt = null; // the pod shows the place instead
       _haptic(HapticFeedback.heavyImpact);
       if (place == 1) {
@@ -484,7 +519,7 @@ class LudiGame extends FlameGame {
       spinTurns: 2,
     );
     victim.shownDistance = 0;
-    _layoutTokens();
+    _layoutTokensIfNeeded();
   }
 
   /// Unlocks input for whoever plays next, sending the die over first

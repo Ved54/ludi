@@ -1,7 +1,9 @@
-import 'package:flame/components.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flame/game.dart';
 import 'package:ludi/game/components/board_component.dart';
+import 'package:ludi/game/components/dice_component.dart';
 import 'package:ludi/game/components/path_waypoints.dart';
+import 'package:ludi/game/components/toast_component.dart';
 import 'package:ludi/game/components/token_component.dart';
 import 'package:ludi/game/ludi_game.dart';
 import 'package:ludi/rules_engine/models/game_state.dart';
@@ -27,6 +29,7 @@ void main() {
     required List<Token> red,
     required List<Token> blue,
     required List<int> rolls,
+    bool roll = true,
   }) async {
     final controller = GameController(
       initialState: stateWith([playerWith(PlayerColor.red, red), playerWith(PlayerColor.blue, blue)]),
@@ -34,8 +37,10 @@ void main() {
       holdMovesForAnimation: true,
     );
     final game = await mountGame(tester, controller: controller);
-    game.requestRoll();
-    await pumpSeconds(tester, 1);
+    if (roll) {
+      game.requestRoll();
+      await pumpSeconds(tester, 1);
+    }
     return game;
   }
 
@@ -120,9 +125,93 @@ void main() {
     expect(game.selectedToken, isNull);
     expect(game.prompt, 'Pick a token');
 
-    game.onBoardTap(square(b, 33)); // now it shows, and plays
+    game.onBoardTap(square(b, 33)); // now it shows: the first tap previews
+    await pumpSeconds(tester, 0.2);
+    expect(b.distance, 30);
+    expect(game.selectedToken, b);
+    expect(game.armedMove?.newDistance, 33);
+    expect(game.prompt, 'Tap again');
+
+    game.onBoardTap(square(b, 33)); // the second plays
     await pumpSeconds(tester, 2);
     expect(b.distance, 33);
+  });
+
+  testWidgets('a cold marker tap previews; tapping elsewhere drops the preview', (tester) async {
+    final a = tokenAt(PlayerColor.red, 20, id: 'red0'); // -> 23
+    final b = tokenAt(PlayerColor.red, 30, id: 'red1'); // -> 33
+    final game = await start(
+      tester,
+      red: [a, b, ...yard(PlayerColor.red, [2, 3])],
+      blue: yard(PlayerColor.blue, [0, 1, 2, 3]),
+      rolls: [3],
+    );
+
+    game.onBoardTap(square(a, 23));
+    await pumpSeconds(tester, 0.2);
+    expect(game.controller.state.phase, GamePhase.selecting, reason: 'one tap never moves');
+    expect(game.armedMove?.token, a);
+
+    game.onBoardTap(Vector2(180, 180)); // the middle of the board: nothing there
+    expect(game.armedMove, isNull);
+    expect(game.selectedToken, isNull);
+    expect(game.prompt, 'Pick a token');
+
+    game.onBoardTap(body(game, b)); // a token itself still moves on one tap
+    await pumpSeconds(tester, 2);
+    expect(b.distance, 33);
+    expect(a.distance, 20);
+  });
+
+  testWidgets('a third 6 in a row ends the turn, and the pod says why', (tester) async {
+    final a = tokenAt(PlayerColor.red, 10, id: 'red0');
+    final game = await start(
+      tester,
+      red: [a, ...yard(PlayerColor.red, [1, 2, 3])],
+      blue: yard(PlayerColor.blue, [0, 1, 2, 3]),
+      rolls: [6, 6, 6, 1],
+    );
+    for (final target in [16, 22]) {
+      expect(game.prompt, 'Pick a token'); // move a, or bring a token out
+      game.onBoardTap(body(game, a));
+      await pumpSeconds(tester, 2.5);
+      expect(a.distance, target);
+      expect(game.prompt, 'Roll again');
+      game.requestRoll();
+      await pumpSeconds(tester, 1);
+    }
+
+    expect(game.prompt, 'Three 6s!');
+    expect(game.children.whereType<ToastComponent>().single.text, 'Three 6s · turn over');
+    expect(a.distance, 22, reason: 'the first two moves stand');
+    await pumpSeconds(tester, 2);
+    expect(game.activeColor, PlayerColor.blue);
+    expect(game.prompt, 'Tap to roll');
+  });
+
+  testWidgets('the die rolls when the finger lifts; dragging off cancels', (tester) async {
+    final game = await start(
+      tester,
+      red: yard(PlayerColor.red, [0, 1, 2, 3]),
+      blue: yard(PlayerColor.blue, [0, 1, 2, 3]),
+      rolls: [4, 4],
+      roll: false,
+    );
+    final dice = game.children.whereType<DiceComponent>().single;
+    final origin = tester.getTopLeft(find.byType(GameWidget<LudiGame>));
+    final at = origin + dice.position.toOffset();
+
+    final drag = await tester.startGesture(at);
+    await pumpSeconds(tester, 0.1);
+    expect(game.canRoll, isTrue, reason: 'nothing happens on touch-down');
+    await drag.moveBy(const Offset(0, 80)); // slides off
+    await drag.up();
+    await pumpSeconds(tester, 0.2);
+    expect(game.canRoll, isTrue, reason: 'a drag is not a tap');
+
+    await tester.tapAt(at);
+    await pumpSeconds(tester, 0.1);
+    expect(game.canRoll, isFalse, reason: 'a real tap rolls');
   });
 
   testWidgets('a wasted roll says why in the pod', (tester) async {
